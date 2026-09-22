@@ -13,6 +13,13 @@ from agent_service.tools.inspect_api_spec import (
     InspectApiSpecResult,
     inspect_api_spec,
 )
+from agent_service.tools.inspect_endpoint_implementation import (
+    ImplementationSection,
+    InspectEndpointImplementationArgs,
+    InspectEndpointImplementationData,
+    InspectEndpointImplementationResult,
+    inspect_endpoint_implementation,
+)
 from agent_service.tools.inspect_server_logs import (
     InspectServerLogsArgs,
     InspectServerLogsData,
@@ -26,9 +33,13 @@ __all__ = [
     "ExecuteApiRequestData",
     "ExecuteApiRequestResult",
     "HttpMethod",
+    "ImplementationSection",
     "InspectApiSpecArgs",
     "InspectApiSpecData",
     "InspectApiSpecResult",
+    "InspectEndpointImplementationArgs",
+    "InspectEndpointImplementationData",
+    "InspectEndpointImplementationResult",
     "InspectServerLogsArgs",
     "InspectServerLogsData",
     "InspectServerLogsResult",
@@ -37,5 +48,6 @@ __all__ = [
     "ToolResult",
     "execute_api_request",
     "inspect_api_spec",
+    "inspect_endpoint_implementation",
     "inspect_server_logs",
 ]
