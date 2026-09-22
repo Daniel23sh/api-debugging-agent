@@ -40,3 +40,14 @@ class Payment(BaseModel):
     order_id: int
     amount: Decimal
     status: str
+
+
+class RequestLog(BaseModel):
+    id: int
+    request_id: str
+    event_type: str
+    method: str
+    path: str
+    status_code: int | None = None
+    error_type: str | None = None
+    error_message: str | None = None

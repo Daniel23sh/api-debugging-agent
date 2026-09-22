@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
 
-from sandbox_api.models import Inventory, Order, Payment, Product
+from sandbox_api.models import Inventory, Order, Payment, Product, RequestLog
 
 PRODUCTS = (
     (1, "Mechanical Keyboard", "79.99"),
@@ -44,7 +44,32 @@ CREATE TABLE IF NOT EXISTS payments (
     amount TEXT NOT NULL,
     status TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS request_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    method TEXT NOT NULL,
+    path TEXT NOT NULL,
+    status_code INTEGER,
+    error_type TEXT,
+    error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_request_logs_request_id
+ON request_logs (request_id, id);
 """
+
+
+def _load_fixtures(connection: sqlite3.Connection) -> None:
+    connection.executemany(
+        "INSERT OR IGNORE INTO products (id, name, price) VALUES (?, ?, ?)",
+        PRODUCTS,
+    )
+    connection.executemany(
+        "INSERT OR IGNORE INTO inventory (product_id, quantity) VALUES (?, ?)",
+        INVENTORY,
+    )
 
 
 class Database:
@@ -65,14 +90,77 @@ class Database:
     def initialize(self) -> None:
         with self.connect() as connection:
             connection.executescript(SCHEMA)
-            connection.executemany(
-                "INSERT OR IGNORE INTO products (id, name, price) VALUES (?, ?, ?)",
-                PRODUCTS,
+            _load_fixtures(connection)
+
+    def reset(self) -> None:
+        with self.connect() as connection:
+            connection.execute("DELETE FROM payments")
+            connection.execute("DELETE FROM orders")
+            connection.execute("DELETE FROM request_logs")
+            connection.execute("DELETE FROM inventory")
+            connection.execute("DELETE FROM products")
+            connection.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN (?, ?, ?)",
+                ("orders", "payments", "request_logs"),
             )
-            connection.executemany(
-                "INSERT OR IGNORE INTO inventory (product_id, quantity) VALUES (?, ?)",
-                INVENTORY,
+            _load_fixtures(connection)
+
+    def add_request_log(
+        self,
+        *,
+        request_id: str,
+        event_type: str,
+        method: str,
+        path: str,
+        status_code: int | None = None,
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO request_logs (
+                    request_id,
+                    event_type,
+                    method,
+                    path,
+                    status_code,
+                    error_type,
+                    error_message
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    request_id,
+                    event_type,
+                    method,
+                    path,
+                    status_code,
+                    error_type,
+                    error_message[:500] if error_message else None,
+                ),
             )
+
+    def get_request_logs(self, request_id: str) -> list[RequestLog]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    request_id,
+                    event_type,
+                    method,
+                    path,
+                    status_code,
+                    error_type,
+                    error_message
+                FROM request_logs
+                WHERE request_id = ?
+                ORDER BY id
+                """,
+                (request_id,),
+            ).fetchall()
+        return [RequestLog(**dict(row)) for row in rows]
 
     def get_product(self, product_id: int) -> Product | None:
         with self.connect() as connection:
