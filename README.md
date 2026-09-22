@@ -14,6 +14,12 @@ python -m pip install -e ".[dev]"
 
 Copy `.env.example` to `.env` and set values as needed.
 
+Run the Sandbox API locally:
+
+```bash
+uvicorn sandbox_api.main:app --reload
+```
+
 ## Tests
 
 ```bash
