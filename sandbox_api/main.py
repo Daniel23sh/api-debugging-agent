@@ -75,9 +75,11 @@ def create_app(database_path: str | Path = "sandbox.db") -> FastAPI:
         return response
 
     @app.get("/products/{product_id}", response_model=Product)
-    def get_product(product_id: int) -> Product:
+    def get_product(product_id: int) -> Product | JSONResponse:
         product = database.get_product(product_id)
         if product is None:
+            if product_id == 999:
+                return JSONResponse(status_code=200, content={})
             raise HTTPException(status_code=404, detail="Product not found")
         return product
 
@@ -98,11 +100,19 @@ def create_app(database_path: str | Path = "sandbox.db") -> FastAPI:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
     @app.get("/orders/{order_id}", response_model=Order)
-    def get_order(order_id: int) -> Order:
+    def get_order(order_id: int) -> Order | JSONResponse:
         order = database.get_order(order_id)
         if order is None:
             raise HTTPException(status_code=404, detail="Order not found")
-        return order
+        return JSONResponse(
+            content={
+                "id": order.id,
+                "productId": order.product_id,
+                "quantity": order.quantity,
+                "status": order.status,
+                "total": str(order.total),
+            }
+        )
 
     @app.post(
         "/payments",

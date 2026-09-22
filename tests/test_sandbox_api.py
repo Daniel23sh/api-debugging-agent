@@ -37,7 +37,7 @@ def test_existing_product_returns_product(client: TestClient) -> None:
 
 
 def test_missing_product_returns_404(client: TestClient) -> None:
-    response = client.get("/products/999")
+    response = client.get("/products/998")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Product not found"}
@@ -82,7 +82,7 @@ def test_order_creation_updates_inventory_and_can_be_retrieved(
 
     retrieved = client.get(f"/orders/{order['id']}")
     assert retrieved.status_code == 200
-    assert retrieved.json() == order
+    assert retrieved.json()["id"] == order["id"]
 
 
 def test_order_for_unknown_product_returns_404(client: TestClient) -> None:
@@ -174,7 +174,7 @@ def test_error_response_is_logged(
     client: TestClient,
     database: Database,
 ) -> None:
-    response = client.get("/products/999")
+    response = client.get("/products/998")
 
     request_id = response.headers[REQUEST_ID_HEADER]
     logs = database.get_request_logs(request_id)

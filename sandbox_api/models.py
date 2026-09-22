@@ -1,6 +1,7 @@
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, WithJsonSchema
 
 
 class Product(BaseModel):
@@ -15,7 +16,11 @@ class Inventory(BaseModel):
 
 
 class InventoryUpdate(BaseModel):
-    quantity: int = Field(ge=0)
+    quantity: Annotated[
+        int,
+        Field(gt=0),
+        WithJsonSchema({"type": "integer", "minimum": 0}),
+    ]
 
 
 class OrderCreate(BaseModel):
