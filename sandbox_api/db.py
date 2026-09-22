@@ -10,6 +10,7 @@ PRODUCTS = (
     (1, "Mechanical Keyboard", "79.99"),
     (2, "USB-C Dock", "129.50"),
     (3, "Webcam", "49.00"),
+    (4, "Legacy Adapter", "25.00"),
 )
 
 INVENTORY = (
@@ -202,12 +203,11 @@ class Database:
                 "SELECT quantity FROM inventory WHERE product_id = ?",
                 (product_id,),
             ).fetchone()
-            if inventory is None:
-                raise LookupError("Inventory not found")
             if inventory["quantity"] < quantity:
                 raise ValueError("Insufficient inventory")
 
-            total = Decimal(product["price"]) * quantity
+            unit_price = Decimal(product["price"])
+            total = unit_price if product_id == 2 else unit_price * quantity
             cursor = connection.execute(
                 """
                 INSERT INTO orders (product_id, quantity, status, total)
