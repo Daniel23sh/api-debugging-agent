@@ -25,6 +25,12 @@ class DecisionProvider(Protocol):
     async def next_decision(self, state: DebugSessionState) -> AgentDecision: ...
 
 
+class DecisionProviderError(Exception):
+    def __init__(self, error_type: str, message: str) -> None:
+        self.error_type = error_type
+        super().__init__(message)
+
+
 class LoopFeedbackType(StrEnum):
     TOOL_CALL_LIMIT_REACHED = "TOOL_CALL_LIMIT_REACHED"
     IDENTICAL_TOOL_CALL_LIMIT_REACHED = "IDENTICAL_TOOL_CALL_LIMIT_REACHED"
@@ -53,7 +59,18 @@ async def run_agent(
     try:
         async with asyncio.timeout(limits.session_timeout_seconds):
             while state.step_count < limits.max_agent_decisions:
-                decision = await provider.next_decision(state.model_copy(deep=True))
+                try:
+                    decision = await provider.next_decision(state.model_copy(deep=True))
+                except DecisionProviderError as error:
+                    state.record_feedback(Observation(
+                        tool_name="decision_provider",
+                        success=False,
+                        error={"type": error.error_type, "message": str(error)},
+                    ))
+                    state.mark_completed()
+                    return DebugDiagnosis(
+                        status="INCONCLUSIVE", missing_evidence=[str(error)]
+                    )
                 state.record_decision()
 
                 if isinstance(decision, FinalAnswerDecision):
