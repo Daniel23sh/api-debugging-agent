@@ -9,7 +9,13 @@ from agent_service.agent.dispatch import (
     prepare_tool_call,
     registered_tool_schemas,
 )
-from agent_service.agent.loop import DecisionProvider, LoopFeedbackType, run_agent
+from agent_service.agent.loop import (
+    DecisionProvider,
+    DecisionProviderError,
+    LoopFeedbackType,
+    run_agent,
+)
+from agent_service.agent.openai_provider import OpenAIDecisionProvider
 from agent_service.agent.schemas import (
     AgentDecision,
     DebugDiagnosis,
@@ -30,6 +36,7 @@ __all__ = [
     "DebugDiagnosis",
     "DebugSessionState",
     "DecisionProvider",
+    "DecisionProviderError",
     "DiagnosisStatus",
     "DispatchErrorType",
     "EvidenceItem",
@@ -37,6 +44,7 @@ __all__ = [
     "FinalAnswerDecision",
     "LoopFeedbackType",
     "Observation",
+    "OpenAIDecisionProvider",
     "SessionStatus",
     "ToolCallDecision",
     "ToolCallRecord",
