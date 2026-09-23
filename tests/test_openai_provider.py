@@ -316,7 +316,10 @@ async def test_correction_resubmits_pending_output_from_last_accepted_response()
     ], output_parsed=None),
     SimpleNamespace(id="bad", status="completed", output=[
         tool_response("x", "inspect_api_spec", {}, "call-1").output[0],
-        final_response("y").output[0],
+        SimpleNamespace(
+            type="message", phase="final_answer",
+            content=[SimpleNamespace(type="output_text")],
+        ),
     ], output_parsed=final_response("y").output_parsed),
     SimpleNamespace(id="bad", status="completed", output=None, output_parsed=None),
     SimpleNamespace(id="bad", status="completed", output=[SimpleNamespace(
@@ -390,7 +393,7 @@ async def test_real_sdk_parse_request_shape_uses_strict_text_format() -> None:
             "status": "completed",
             "output": [{
                 "type": "message", "id": "message-1", "status": "completed",
-                "role": "assistant", "content": [{
+                "role": "assistant", "phase": "final_answer", "content": [{
                     "type": "output_text", "text": json.dumps(diagnosis),
                     "annotations": [],
                 }],
@@ -413,6 +416,49 @@ async def test_real_sdk_parse_request_shape_uses_strict_text_format() -> None:
         "inspect_api_spec", "execute_api_request", "inspect_server_logs",
         "inspect_endpoint_implementation",
     }
+
+
+@pytest.mark.asyncio
+async def test_real_sdk_commentary_and_one_function_call_is_one_decision() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "id": "sdk-response",
+            "object": "response",
+            "created_at": 0,
+            "model": "gpt-6-sol",
+            "status": "completed",
+            "output": [
+                {"type": "reasoning", "id": "reasoning-1", "summary": []},
+                {
+                    "type": "message", "id": "message-1", "status": "completed",
+                    "role": "assistant", "phase": "commentary",
+                    "content": [{
+                        "type": "output_text", "text": "Checking the API specification.",
+                        "annotations": [],
+                    }],
+                },
+                {
+                    "type": "function_call", "id": "function-1", "status": "completed",
+                    "name": "inspect_api_spec", "call_id": "call-1",
+                    "arguments": '{"method":"GET","path":"/products/1"}',
+                },
+            ],
+        })
+
+    current = state()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = AsyncOpenAI(api_key="test-key", http_client=http_client, max_retries=0)
+        adapter = OpenAIDecisionProvider(client=client)
+        decision = await adapter.next_decision(current)
+
+    assert isinstance(decision, ToolCallDecision)
+    assert decision.tool_name == "inspect_api_spec"
+    assert len(requests) == 1
+    assert current.step_count == current.tool_call_count == 0
+    assert current.observations == []
 
 
 @pytest.mark.asyncio

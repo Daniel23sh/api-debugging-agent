@@ -235,7 +235,14 @@ class OpenAIDecisionProvider:
         output = getattr(response, "output", None)
         if not isinstance(output, list):
             raise _InvalidModelOutput("Response has no output items")
-        actions = [item for item in output if getattr(item, "type", None) != "reasoning"]
+        actions = [
+            item for item in output
+            if getattr(item, "type", None) != "reasoning"
+            and not (
+                getattr(item, "type", None) == "message"
+                and getattr(item, "phase", None) == "commentary"
+            )
+        ]
         if len(actions) != 1:
             raise _InvalidModelOutput("Expected exactly one action")
         action = actions[0]
