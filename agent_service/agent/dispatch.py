@@ -148,12 +148,9 @@ def canonical_call_identity(tool_call: ToolCallRecord) -> str:
     )
 
 
-async def dispatch_tool_call(
-    decision: ToolCallDecision,
-    *,
-    transport: httpx.AsyncBaseTransport | None = None,
-    database: Database | None = None,
-) -> ToolDispatchResult:
+def _validate_tool_call(
+    decision: ToolCallDecision | ToolCallRecord,
+) -> tuple[_RegisteredTool, BaseModel] | ToolDispatchResult:
     registration = TOOL_REGISTRY.get(decision.tool_name)
     if registration is None:
         return _rejected(
@@ -172,6 +169,34 @@ async def dispatch_tool_call(
             details=_validation_details(error),
         )
 
+    return registration, args
+
+
+def prepare_tool_call(
+    decision: ToolCallDecision,
+) -> ToolCallRecord | ToolDispatchResult:
+    """Validate without executing; return a normalized record or rejection feedback."""
+    validated = _validate_tool_call(decision)
+    if isinstance(validated, ToolDispatchResult):
+        return validated
+    registration, args = validated
+    return ToolCallRecord(
+        tool_name=registration.name,
+        arguments=args.model_dump(mode="json"),
+    )
+
+
+async def dispatch_tool_call(
+    decision: ToolCallDecision | ToolCallRecord,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+    database: Database | None = None,
+) -> ToolDispatchResult:
+    """Execute a request or prepared record, revalidating mutable records at entry."""
+    validated = _validate_tool_call(decision)
+    if isinstance(validated, ToolDispatchResult):
+        return validated
+    registration, args = validated
     tool_call = ToolCallRecord(
         tool_name=registration.name,
         arguments=args.model_dump(mode="json"),

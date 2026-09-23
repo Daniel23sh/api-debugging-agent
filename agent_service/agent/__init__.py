@@ -6,6 +6,7 @@ from agent_service.agent.dispatch import (
     ToolDispatchResult,
     canonical_call_identity,
     dispatch_tool_call,
+    prepare_tool_call,
     registered_tool_schemas,
 )
 from agent_service.agent.schemas import (
@@ -39,5 +40,6 @@ __all__ = [
     "ToolDispatchResult",
     "canonical_call_identity",
     "dispatch_tool_call",
+    "prepare_tool_call",
     "registered_tool_schemas",
 ]

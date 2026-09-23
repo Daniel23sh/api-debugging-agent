@@ -10,9 +10,10 @@ from agent_service.agent.dispatch import (
     DispatchErrorType,
     canonical_call_identity,
     dispatch_tool_call,
+    prepare_tool_call,
     registered_tool_schemas,
 )
-from agent_service.agent.schemas import ToolCallDecision
+from agent_service.agent.schemas import ToolCallDecision, ToolCallRecord
 from agent_service.agent.state import DebugSessionState
 from agent_service.tools.execute_api_request import ExecuteApiRequestArgs
 from agent_service.tools.inspect_api_spec import InspectApiSpecArgs
@@ -294,3 +295,67 @@ async def test_dispatch_does_not_mutate_session_state() -> None:
     )
 
     assert state.model_dump() == before
+
+
+def test_preparation_never_executes_any_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unexpected_execution(*args, **kwargs):
+        pytest.fail("preparation executed a tool")
+
+    for name in TOOL_REGISTRY:
+        monkeypatch.setattr(f"agent_service.agent.dispatch.{name}", unexpected_execution)
+
+    for name in TOOL_REGISTRY:
+        arguments = (
+            {"request_id": "DC1C7458D12C4C209601F86F6A4466A5"}
+            if name == "inspect_server_logs"
+            else {"method": "post", "path": " /orders "}
+        )
+        prepared = prepare_tool_call(decision(name, arguments))
+        assert isinstance(prepared, ToolCallRecord)
+        assert prepared.arguments == (
+            {"request_id": "dc1c7458-d12c-4c20-9601-f86f6a4466a5"}
+            if name == "inspect_server_logs"
+            else {"method": "POST", "path": "/orders", "body": None}
+            if name == "execute_api_request"
+            else {"method": "POST", "path": "/orders"}
+        )
+        equivalent = prepare_tool_call(decision(name, prepared.arguments))
+        assert isinstance(equivalent, ToolCallRecord)
+        assert canonical_call_identity(prepared) == canonical_call_identity(equivalent)
+
+    for name, arguments, error_type in [
+        ("unknown", {}, "TOOL_NOT_FOUND"),
+        ("inspect_server_logs", {"request_id": "invalid"},
+         "TOOL_ARGUMENT_VALIDATION_ERROR"),
+    ]:
+        rejected = prepare_tool_call(decision(name, arguments))
+        assert not isinstance(rejected, ToolCallRecord)
+        assert not rejected.accepted
+        assert rejected.observation.error["type"] == error_type
+
+
+@pytest.mark.asyncio
+async def test_prepared_call_executes_only_when_dispatched() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(201, json={"id": 1})
+
+    prepared = prepare_tool_call(decision(
+        "execute_api_request",
+        {"method": "post", "path": " /orders ", "body": {"quantity": 1}},
+    ))
+    assert isinstance(prepared, ToolCallRecord)
+    identity = canonical_call_identity(prepared)
+    assert requests == []
+    result = await dispatch_tool_call(prepared, transport=httpx.MockTransport(handler))
+    assert len(requests) == 1
+    assert result.accepted and result.observation.success
+    assert canonical_call_identity(result.tool_call) == identity
+
+    # Prepared records are mutable; execution must still validate at its boundary.
+    prepared.arguments["transport"] = "untrusted"
+    rejected = await dispatch_tool_call(prepared, transport=httpx.MockTransport(handler))
+    assert not rejected.accepted
+    assert len(requests) == 1
