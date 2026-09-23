@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -93,7 +94,9 @@ async def _inspect_server_logs(
     _: httpx.AsyncBaseTransport | None,
     database: Database | None,
 ) -> ToolResult[Any]:
-    return inspect_server_logs(cast(InspectServerLogsArgs, args), database=database)
+    return await asyncio.to_thread(
+        inspect_server_logs, cast(InspectServerLogsArgs, args), database=database
+    )
 
 
 async def _inspect_endpoint_implementation(
@@ -101,8 +104,9 @@ async def _inspect_endpoint_implementation(
     _: httpx.AsyncBaseTransport | None,
     __: Database | None,
 ) -> ToolResult[Any]:
-    return inspect_endpoint_implementation(
-        cast(InspectEndpointImplementationArgs, args)
+    return await asyncio.to_thread(
+        inspect_endpoint_implementation,
+        cast(InspectEndpointImplementationArgs, args),
     )
 
 

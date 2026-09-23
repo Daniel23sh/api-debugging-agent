@@ -25,6 +25,11 @@ class DebugSessionState(BaseModel):
     def record_decision(self) -> None:
         self.step_count += 1
 
+    def record_feedback(self, observation: Observation) -> None:
+        if observation.success:
+            raise ValueError("feedback must be a failed observation")
+        self.observations.append(observation)
+
     def record_tool_result(
         self,
         tool_call: ToolCallRecord,
