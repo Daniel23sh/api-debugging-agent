@@ -9,6 +9,7 @@ from agent_service.agent.dispatch import (
     prepare_tool_call,
     registered_tool_schemas,
 )
+from agent_service.agent.loop import DecisionProvider, LoopFeedbackType, run_agent
 from agent_service.agent.schemas import (
     AgentDecision,
     DebugDiagnosis,
@@ -28,11 +29,13 @@ __all__ = [
     "AgentLimits",
     "DebugDiagnosis",
     "DebugSessionState",
+    "DecisionProvider",
     "DiagnosisStatus",
     "DispatchErrorType",
     "EvidenceItem",
     "EvidenceSource",
     "FinalAnswerDecision",
+    "LoopFeedbackType",
     "Observation",
     "SessionStatus",
     "ToolCallDecision",
@@ -42,4 +45,5 @@ __all__ = [
     "dispatch_tool_call",
     "prepare_tool_call",
     "registered_tool_schemas",
+    "run_agent",
 ]
