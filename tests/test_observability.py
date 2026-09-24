@@ -23,6 +23,7 @@ from opentelemetry.trace import StatusCode
 from phoenix.otel import PROJECT_NAME
 
 from agent_service.agent import (
+    AgentLimits,
     DebugDiagnosis,
     DebugSessionState,
     FinalAnswerDecision,
@@ -101,7 +102,12 @@ def sdk_final_response(
     }
 
 
-def sdk_tool_response(response_id: str, *, arguments: str) -> dict:
+def sdk_tool_response(
+    response_id: str,
+    *,
+    arguments: str,
+    name: str = "execute_api_request",
+) -> dict:
     return {
         "id": response_id,
         "object": "response",
@@ -113,7 +119,7 @@ def sdk_tool_response(response_id: str, *, arguments: str) -> dict:
                 "type": "function_call",
                 "id": f"function-{response_id}",
                 "status": "completed",
-                "name": "execute_api_request",
+                "name": name,
                 "call_id": f"call-{response_id}",
                 "arguments": arguments,
             }
@@ -356,21 +362,47 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
     assert "unknown" not in {span.name for span in spans}
 
 
-def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
+def test_complete_observability_hierarchy_and_privacy_acceptance(
     monkeypatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
     exporter = RecordingExporter()
     tracer_provider = configure_tracing(span_exporter=exporter)
     assert tracer_provider is not None
     model_requests: list[dict] = []
-    response_marker = "do-not-trace-this-tool-observation"
+    request_id = "6c0df0f0-0a17-47f8-858e-8a92f3762c65"
+    response_marker = "do-not-trace-this-response-body"
+    log_marker = "do-not-trace-this-log-message"
+    source_marker = "BEGIN IMMEDIATE"
+    database = Database(tmp_path / "sandbox.db")
+    database.initialize()
+    database.add_request_log(
+        request_id=request_id,
+        event_type="request_started",
+        method="POST",
+        path="/orders",
+    )
+    database.add_request_log(
+        request_id=request_id,
+        event_type="request_failed",
+        method="POST",
+        path="/orders",
+        status_code=500,
+        error_type="TypeError",
+        error_message=log_marker,
+    )
     diagnosis = {
         "status": "RESOLVED",
         "affected_endpoint": "POST /orders",
         "root_cause": "do-not-trace-this-root-cause",
         "evidence": [
-            {"source": "api_execution", "finding": "do-not-trace-this-evidence"}
+            {"source": "api_execution", "finding": "do-not-trace-this-evidence"},
+            {"source": "server_logs", "finding": "Correlated request failed"},
+            {
+                "source": "endpoint_implementation",
+                "finding": "Missing inventory is dereferenced",
+            },
         ],
         "missing_evidence": [],
         "suggested_fix": "do-not-trace-this-suggested-fix",
@@ -392,17 +424,37 @@ def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
                 200,
                 json=sdk_tool_response("model-1", arguments=arguments),
             )
-        assert response_marker in model_requests[1]["input"][0]["output"]
+        if len(model_requests) == 2:
+            assert response_marker in model_requests[1]["input"][0]["output"]
+            return httpx.Response(
+                200,
+                json=sdk_tool_response(
+                    "model-2",
+                    name="inspect_server_logs",
+                    arguments=json.dumps({"request_id": request_id}),
+                ),
+            )
+        if len(model_requests) == 3:
+            assert log_marker in model_requests[2]["input"][0]["output"]
+            return httpx.Response(
+                200,
+                json=sdk_tool_response(
+                    "model-3",
+                    name="inspect_endpoint_implementation",
+                    arguments=json.dumps({"method": "POST", "path": "/orders"}),
+                ),
+            )
+        assert source_marker in model_requests[3]["input"][0]["output"]
         return httpx.Response(
             200,
-            json=sdk_final_response("model-2", diagnosis=diagnosis),
+            json=sdk_final_response("model-4", diagnosis=diagnosis),
         )
 
     def tool_response(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             500,
             json={"detail": response_marker},
-            headers={REQUEST_ID_HEADER: "request-5d"},
+            headers={REQUEST_ID_HEADER: request_id},
         )
 
     openai_http_client = httpx.AsyncClient(
@@ -416,6 +468,7 @@ def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
     app = create_app(
         lambda: OpenAIDecisionProvider(client=openai_client),
         transport=httpx.MockTransport(tool_response),
+        database=database,
         tracing_factory=lambda: tracer_provider,
     )
     with TestClient(app) as client:
@@ -435,16 +488,38 @@ def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
         if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
         == OpenInferenceSpanKindValues.LLM.value
     ]
-    tool = next(span for span in spans if span.name == "execute_api_request")
-
-    assert len(model_requests) == len(decisions) == len(llm_spans) == 2
-    assert [span.parent.span_id for span in llm_spans] == [
-        span.context.span_id for span in decisions
+    tools = [
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.TOOL.value
     ]
+    final = next(span for span in spans if span.name == "final_diagnosis")
+
+    assert len(spans) == 13
+    assert len(model_requests) == len(decisions) == len(llm_spans) == 4
+    assert len(tools) == 3
+    assert {span.parent.span_id for span in llm_spans} == {
+        span.context.span_id for span in decisions
+    }
     assert all(span.context.trace_id == session.context.trace_id for span in spans)
-    assert tool.parent.span_id == session.context.span_id
+    assert session.parent is None
+    assert [span for span in spans if span.parent is None] == [session]
+    assert all(
+        span.parent.span_id == session.context.span_id for span in decisions
+    )
+    assert all(span.parent.span_id == session.context.span_id for span in tools)
+    assert final.parent.span_id == session.context.span_id
     assert all(span.parent.span_id != session.context.span_id for span in llm_spans)
     assert "model_call" not in {span.name for span in spans}
+    assert all(
+        span.attributes[SpanAttributes.OPENINFERENCE_SPAN_KIND]
+        == OpenInferenceSpanKindValues.AGENT.value
+        for span in [session, *decisions]
+    )
+    assert final.attributes[SpanAttributes.OPENINFERENCE_SPAN_KIND] == (
+        OpenInferenceSpanKindValues.CHAIN.value
+    )
     assert all(
         span.attributes[SpanAttributes.LLM_MODEL_NAME] == "gpt-6-sol"
         for span in llm_spans
@@ -466,11 +541,46 @@ def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
         for span in llm_spans
         for key in span.attributes
     )
+
+    tools_by_name = {span.name: span for span in tools}
+    execution = tools_by_name["execute_api_request"]
+    assert execution.attributes["apilens.tool.method"] == "POST"
+    assert execution.attributes["apilens.tool.path"] == "/orders"
+    assert execution.attributes["apilens.tool.status_code"] == 500
+    assert execution.attributes["apilens.tool.request_id"] == request_id
+    assert execution.attributes["apilens.tool.success"] is True
+    assert execution.status.status_code is StatusCode.UNSET
+    logs = tools_by_name["inspect_server_logs"]
+    assert logs.attributes["apilens.tool.request_id"] == request_id
+    assert logs.attributes["apilens.tool.logs_found"] is True
+    assert logs.attributes["apilens.tool.event_count"] == 2
+    implementation = tools_by_name["inspect_endpoint_implementation"]
+    assert implementation.attributes["apilens.tool.method"] == "POST"
+    assert implementation.attributes["apilens.tool.path"] == "/orders"
+    assert implementation.attributes["apilens.tool.implementation_found"] is True
+    assert implementation.attributes["apilens.tool.section_count"] > 0
+
+    returned = DebugDiagnosis.model_validate(response.json())
+    assert session.attributes["apilens.session.final_status"] == "RESOLVED"
+    assert session.attributes["apilens.session.decision_count"] == 4
+    assert session.attributes["apilens.session.tool_call_count"] == 3
+    assert final.attributes["apilens.diagnosis.status"] == returned.status.value
+    assert final.attributes["apilens.diagnosis.affected_endpoint"] == (
+        returned.affected_endpoint
+    )
+    assert final.attributes["apilens.diagnosis.evidence_count"] == len(
+        returned.evidence
+    )
+    assert final.attributes["apilens.diagnosis.root_cause_present"] is True
+    assert final.attributes["apilens.diagnosis.suggested_fix_present"] is True
+
     trace_data = repr([span.attributes for span in spans])
     for secret in (
         "do-not-trace-this-user-issue",
         "do-not-trace-this-model-tool-argument",
         response_marker,
+        log_marker,
+        source_marker,
         "do-not-trace-this-root-cause",
         "do-not-trace-this-evidence",
         "do-not-trace-this-suggested-fix",
@@ -800,19 +910,26 @@ async def test_interrupted_tool_execution_is_marked_as_session_timeout(
     monkeypatch.setattr(
         "agent_service.agent.dispatch.execute_api_request", slow_execution
     )
-    with pytest.raises(TimeoutError):
-        async with asyncio.timeout(0.01):
-            await dispatch_tool_call(
-                ToolCallDecision(
-                    kind="tool_call",
-                    tool_name="execute_api_request",
-                    arguments={"method": "GET", "path": "/products/1"},
-                ),
-                tracer=get_tracer(tracer_provider),
-            )
+    state = DebugSessionState(session_id="timeout-session", issue="timeout safely")
+    tracer = get_tracer(tracer_provider)
+    with tracer.start_as_current_span("DebugSession") as session:
+        diagnosis = await run_agent(
+            state,
+            RetryProvider(),
+            limits=AgentLimits(session_timeout_seconds=1),
+            tracer=tracer,
+        )
     shutdown_tracing(tracer_provider)
 
-    spans = exporter.get_finished_spans()
-    assert [span.name for span in spans] == ["execute_api_request"]
-    assert spans[0].status.status_code is StatusCode.ERROR
-    assert spans[0].attributes[ERROR_TYPE] == "SESSION_TIMEOUT"
+    tool = next(
+        span
+        for span in exporter.get_finished_spans()
+        if span.name == "execute_api_request"
+    )
+    assert diagnosis.status == "LIMIT_REACHED"
+    assert diagnosis.missing_evidence == ["Session timeout reached"]
+    assert state.tool_call_count == 1
+    assert state.observations[-1].error["type"] == "SESSION_TIMEOUT"
+    assert tool.parent.span_id == session.get_span_context().span_id
+    assert tool.status.status_code is StatusCode.ERROR
+    assert tool.attributes[ERROR_TYPE] == "SESSION_TIMEOUT"
