@@ -1,7 +1,10 @@
+import asyncio
 import json
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from openinference.semconv.trace import (
     OpenInferenceSpanKindValues,
@@ -21,6 +24,8 @@ from agent_service.agent import (
     DebugSessionState,
     FinalAnswerDecision,
     ToolCallDecision,
+    dispatch_tool_call,
+    run_agent,
 )
 from agent_service.main import create_app
 from agent_service.observability import (
@@ -30,6 +35,9 @@ from agent_service.observability import (
     get_tracer,
     shutdown_tracing,
 )
+from sandbox_api.db import Database
+from sandbox_api.main import REQUEST_ID_HEADER
+from sandbox_api.main import create_app as create_sandbox_app
 
 
 class RecordingExporter(InMemorySpanExporter):
@@ -136,12 +144,17 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
     assert tracer_provider is not None
     provider = TraceProvider()
     execution_parent_ids: list[int] = []
+    request_id = "6c0df0f0-0a17-47f8-858e-8a92f3762c65"
 
     def respond(request: httpx.Request) -> httpx.Response:
         execution_parent_ids.append(
             trace.get_current_span().get_span_context().span_id
         )
-        return httpx.Response(200, json={"accepted": True})
+        return httpx.Response(
+            500,
+            json={"detail": "do-not-trace-this-response"},
+            headers={REQUEST_ID_HEADER: request_id},
+        )
 
     app = create_app(
         lambda: provider,
@@ -157,23 +170,33 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
     spans = exporter.get_finished_spans()
     session = next(span for span in spans if span.name == "DebugSession")
     decisions = [span for span in spans if span.name == "agent_decision"]
+    tools = [
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.TOOL.value
+    ]
     final = next(span for span in spans if span.name == "final_diagnosis")
 
     assert diagnosis.status == "RESOLVED"
     assert exporter.shutdown_count == 1
-    assert len(spans) == 5
+    assert len(spans) == 6
     assert len(decisions) == provider.calls == 3
+    assert len(tools) == 1
     assert all(span.context.trace_id == session.context.trace_id for span in spans)
     assert session.parent is None
     assert all(span.parent.span_id == session.context.span_id for span in decisions)
     assert final.parent.span_id == session.context.span_id
+    tool = tools[0]
+    assert tool.name == "execute_api_request"
+    assert tool.parent.span_id == session.context.span_id
     assert all(
         span.attributes[SpanAttributes.OPENINFERENCE_SPAN_KIND]
         == OpenInferenceSpanKindValues.AGENT.value
         for span in decisions
     )
     assert provider.decision_span_ids == [span.context.span_id for span in decisions]
-    assert execution_parent_ids == [session.context.span_id]
+    assert execution_parent_ids == [tool.context.span_id]
 
     first, tool_call, final_answer = decisions
     assert first.attributes[ERROR_TYPE] == "TOOL_NOT_FOUND"
@@ -188,6 +211,16 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
             ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON
         ]
     ) == {"method": "POST", "path": "/orders"}
+    assert tool.attributes[SpanAttributes.TOOL_NAME] == "execute_api_request"
+    assert json.loads(
+        tool.attributes[ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON]
+    ) == {"method": "POST", "path": "/orders"}
+    assert tool.attributes["apilens.tool.success"] is True
+    assert tool.attributes["apilens.tool.method"] == "POST"
+    assert tool.attributes["apilens.tool.path"] == "/orders"
+    assert tool.attributes["apilens.tool.status_code"] == 500
+    assert tool.attributes["apilens.tool.request_id"] == request_id
+    assert tool.status.status_code is StatusCode.UNSET
     assert final_answer.attributes["apilens.decision.selected_action"] == (
         "FINAL_ANSWER"
     )
@@ -212,4 +245,221 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
 
     trace_data = repr([span.attributes for span in spans])
     assert "do-not-trace-this" not in trace_data
-    assert "execute_api_request" not in {span.name for span in spans}
+    assert "unknown" not in {span.name for span in spans}
+
+
+@pytest.mark.asyncio
+async def test_typed_failure_is_an_error_but_rejections_emit_no_tool_span(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    tracer = get_tracer(tracer_provider)
+
+    failure = await dispatch_tool_call(
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="inspect_api_spec",
+            arguments={"method": "POST", "path": "/products/1"},
+        ),
+        tracer=tracer,
+    )
+    unknown = await dispatch_tool_call(
+        ToolCallDecision(kind="tool_call", tool_name="unknown", arguments={}),
+        tracer=tracer,
+    )
+    invalid = await dispatch_tool_call(
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="execute_api_request",
+            arguments={"method": "INVALID", "path": "/products/1"},
+        ),
+        tracer=tracer,
+    )
+    shutdown_tracing(tracer_provider)
+
+    spans = exporter.get_finished_spans()
+    assert failure.accepted and not failure.observation.success
+    assert not unknown.accepted and not invalid.accepted
+    assert [span.name for span in spans] == ["inspect_api_spec"]
+    assert spans[0].status.status_code is StatusCode.ERROR
+    assert spans[0].attributes[ERROR_TYPE] == "ENDPOINT_NOT_ALLOWED"
+    assert spans[0].attributes["apilens.tool.success"] is False
+
+
+@pytest.mark.asyncio
+async def test_all_tool_spans_record_only_bounded_structural_metadata(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    tracer = get_tracer(tracer_provider)
+    database_path = tmp_path / "sandbox.db"
+    database = Database(database_path)
+    database.initialize()
+    logged_request_id = uuid4()
+    database.add_request_log(
+        request_id=str(logged_request_id),
+        event_type="request_failed",
+        method="GET",
+        path="/products/1",
+        error_message="do-not-trace-this-log-message",
+    )
+    transport = httpx.ASGITransport(app=create_sandbox_app(database_path))
+    calls = [
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="inspect_api_spec",
+            arguments={"method": "GET", "path": "/products/1"},
+        ),
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="execute_api_request",
+            arguments={"method": "GET", "path": "/products/1"},
+        ),
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="inspect_server_logs",
+            arguments={"request_id": str(logged_request_id)},
+        ),
+        ToolCallDecision(
+            kind="tool_call",
+            tool_name="inspect_endpoint_implementation",
+            arguments={"method": "GET", "path": "/products/1"},
+        ),
+    ]
+    results = [
+        await dispatch_tool_call(
+            call,
+            transport=transport,
+            database=database,
+            tracer=tracer,
+        )
+        for call in calls
+    ]
+    shutdown_tracing(tracer_provider)
+
+    spans = {span.name: span for span in exporter.get_finished_spans()}
+    assert all(result.accepted and result.observation.success for result in results)
+    assert spans["inspect_api_spec"].attributes["apilens.tool.contract_found"] is True
+    assert spans["inspect_api_spec"].attributes["apilens.tool.path"] == (
+        "/products/{product_id}"
+    )
+    assert spans["execute_api_request"].attributes["apilens.tool.status_code"] == 200
+    assert spans["execute_api_request"].attributes["apilens.tool.request_id"]
+    assert spans["inspect_server_logs"].attributes["apilens.tool.logs_found"] is True
+    assert spans["inspect_server_logs"].attributes["apilens.tool.event_count"] == 1
+    assert spans["inspect_endpoint_implementation"].attributes[
+        "apilens.tool.implementation_found"
+    ] is True
+    assert spans["inspect_endpoint_implementation"].attributes[
+        "apilens.tool.section_count"
+    ] > 0
+
+    implementation = results[-1].observation.data["sections"][0]["source"]
+    schema = results[0].observation.data["schemas"]
+    trace_data = repr([span.attributes for span in spans.values()])
+    assert implementation[:80] not in trace_data
+    assert repr(schema) not in trace_data
+    assert "do-not-trace-this-log-message" not in trace_data
+    assert "Mechanical Keyboard" not in trace_data
+
+
+class RetryProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def next_decision(self, state: DebugSessionState):
+        self.calls += 1
+        if self.calls == 1:
+            return ToolCallDecision(
+                kind="tool_call",
+                tool_name="execute_api_request",
+                arguments={"method": "GET", "path": "/products/1"},
+            )
+        return FinalAnswerDecision(
+            kind="final_answer",
+            diagnosis=DebugDiagnosis(
+                status="INCONCLUSIVE", missing_evidence=["More evidence needed"]
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_timeout_retry_emits_one_tool_span_per_attempt(monkeypatch) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    tracer = get_tracer(tracer_provider)
+    attempts = 0
+
+    def recover(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.ReadTimeout("do-not-trace-this-timeout", request=request)
+        return httpx.Response(200, json={"id": 1})
+
+    state = DebugSessionState(session_id="retry-session", issue="retry safely")
+    with tracer.start_as_current_span("DebugSession") as session:
+        diagnosis = await run_agent(
+            state,
+            RetryProvider(),
+            transport=httpx.MockTransport(recover),
+            tracer=tracer,
+        )
+    shutdown_tracing(tracer_provider)
+
+    tools = [
+        span
+        for span in exporter.get_finished_spans()
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.TOOL.value
+    ]
+    assert diagnosis.status == "INCONCLUSIVE"
+    assert attempts == state.tool_call_count == len(tools) == 2
+    assert all(span.parent.span_id == session.get_span_context().span_id for span in tools)
+    assert tools[0].status.status_code is StatusCode.ERROR
+    assert tools[0].attributes[ERROR_TYPE] == "TOOL_TIMEOUT"
+    assert tools[1].status.status_code is StatusCode.UNSET
+    assert tools[1].attributes["apilens.tool.success"] is True
+    assert "do-not-trace-this" not in repr([span.attributes for span in tools])
+
+
+@pytest.mark.asyncio
+async def test_interrupted_tool_execution_is_marked_as_session_timeout(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+
+    async def slow_execution(*args, **kwargs):
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr(
+        "agent_service.agent.dispatch.execute_api_request", slow_execution
+    )
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.01):
+            await dispatch_tool_call(
+                ToolCallDecision(
+                    kind="tool_call",
+                    tool_name="execute_api_request",
+                    arguments={"method": "GET", "path": "/products/1"},
+                ),
+                tracer=get_tracer(tracer_provider),
+            )
+    shutdown_tracing(tracer_provider)
+
+    spans = exporter.get_finished_spans()
+    assert [span.name for span in spans] == ["execute_api_request"]
+    assert spans[0].status.status_code is StatusCode.ERROR
+    assert spans[0].attributes[ERROR_TYPE] == "SESSION_TIMEOUT"
