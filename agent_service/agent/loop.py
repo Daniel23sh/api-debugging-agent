@@ -216,7 +216,11 @@ async def run_agent(
                 for attempt in range(2):
                     pending_call = prepared
                     result = await dispatch_tool_call(
-                        prepared, transport=transport, database=database
+                        prepared,
+                        transport=transport,
+                        database=database,
+                        tracer=tracer,
+                        session_id=state.session_id,
                     )
                     pending_call = None
                     if not result.accepted:
