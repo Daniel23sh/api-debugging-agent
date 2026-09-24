@@ -4,6 +4,13 @@ from enum import StrEnum
 from typing import Protocol
 
 import httpx
+from openinference.semconv.trace import (
+    OpenInferenceSpanKindValues,
+    SpanAttributes,
+    ToolCallAttributes,
+)
+from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
+from opentelemetry.trace import Span, Status, StatusCode, Tracer
 
 from agent_service.agent.dispatch import (
     ToolDispatchResult,
@@ -21,7 +28,10 @@ from agent_service.agent.schemas import (
     ToolCallRecord,
 )
 from agent_service.agent.state import AgentLimits, DebugSessionState
+from agent_service.observability import get_tracer
 from sandbox_api.db import Database
+
+MAX_TRACE_VALUE_CHARS = 256
 
 
 class DecisionProvider(Protocol):
@@ -68,6 +78,28 @@ def _collected_evidence(state: DebugSessionState) -> list[EvidenceItem]:
     ]
 
 
+def _mark_decision_error(span: Span, error_type: str, message: str) -> None:
+    span.set_attribute(ERROR_TYPE, error_type[:MAX_TRACE_VALUE_CHARS])
+    span.set_status(Status(StatusCode.ERROR, message[:MAX_TRACE_VALUE_CHARS]))
+
+
+def _record_selected_tool(span: Span, tool_call: ToolCallRecord) -> None:
+    span.set_attribute(
+        ToolCallAttributes.TOOL_CALL_FUNCTION_NAME,
+        tool_call.tool_name[:MAX_TRACE_VALUE_CHARS],
+    )
+    safe_arguments = {
+        key: value[:MAX_TRACE_VALUE_CHARS]
+        for key in ("method", "path", "request_id")
+        if isinstance((value := tool_call.arguments.get(key)), str)
+    }
+    if safe_arguments:
+        span.set_attribute(
+            ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON,
+            json.dumps(safe_arguments, sort_keys=True, separators=(",", ":")),
+        )
+
+
 async def run_agent(
     state: DebugSessionState,
     provider: DecisionProvider,
@@ -75,54 +107,111 @@ async def run_agent(
     limits: AgentLimits | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     database: Database | None = None,
+    tracer: Tracer | None = None,
 ) -> DebugDiagnosis:
     limits = limits or AgentLimits()
+    tracer = tracer if tracer is not None else get_tracer(None)
     pending_call: ToolCallRecord | None = None
 
     try:
         async with asyncio.timeout(limits.session_timeout_seconds):
             while state.step_count < limits.max_agent_decisions:
-                try:
-                    decision = await provider.next_decision(state.model_copy(deep=True))
-                except DecisionProviderError as error:
-                    state.record_feedback(Observation(
-                        tool_name="decision_provider",
-                        success=False,
-                        error={"type": error.error_type, "message": str(error)},
-                    ))
-                    state.mark_completed()
-                    return DebugDiagnosis(
-                        status="INCONCLUSIVE", missing_evidence=[str(error)]
+                with tracer.start_as_current_span(
+                    "agent_decision",
+                    attributes={
+                        SpanAttributes.OPENINFERENCE_SPAN_KIND: (
+                            OpenInferenceSpanKindValues.AGENT.value
+                        ),
+                        SpanAttributes.SESSION_ID: state.session_id[
+                            :MAX_TRACE_VALUE_CHARS
+                        ],
+                        "apilens.decision.step_number": state.step_count + 1,
+                    },
+                    record_exception=False,
+                    set_status_on_exception=False,
+                ) as decision_span:
+                    try:
+                        decision = await provider.next_decision(
+                            state.model_copy(deep=True)
+                        )
+                    except DecisionProviderError as error:
+                        _mark_decision_error(
+                            decision_span, error.error_type, str(error)
+                        )
+                        state.record_feedback(Observation(
+                            tool_name="decision_provider",
+                            success=False,
+                            error={"type": error.error_type, "message": str(error)},
+                        ))
+                        state.mark_completed()
+                        return DebugDiagnosis(
+                            status="INCONCLUSIVE", missing_evidence=[str(error)]
+                        )
+                    except Exception as error:
+                        _mark_decision_error(
+                            decision_span,
+                            type(error).__name__,
+                            "Decision provider failed",
+                        )
+                        raise
+                    state.record_decision()
+
+                    if isinstance(decision, FinalAnswerDecision):
+                        decision_span.set_attribute(
+                            "apilens.decision.selected_action", "FINAL_ANSWER"
+                        )
+                        state.mark_completed()
+                        return decision.diagnosis
+
+                    decision_span.set_attribute(
+                        "apilens.decision.selected_action", "TOOL_CALL"
                     )
-                state.record_decision()
+                    decision_span.set_attribute(
+                        ToolCallAttributes.TOOL_CALL_FUNCTION_NAME,
+                        decision.tool_name[:MAX_TRACE_VALUE_CHARS],
+                    )
+                    prepared = prepare_tool_call(decision)
+                    if isinstance(prepared, ToolDispatchResult):
+                        error = prepared.observation.error
+                        _mark_decision_error(
+                            decision_span,
+                            str(error["type"]),
+                            str(error["message"]),
+                        )
+                        state.record_feedback(prepared.observation)
+                        continue
 
-                if isinstance(decision, FinalAnswerDecision):
-                    state.mark_completed()
-                    return decision.diagnosis
-
-                prepared = prepare_tool_call(decision)
-                if isinstance(prepared, ToolDispatchResult):
-                    state.record_feedback(prepared.observation)
-                    continue
-
-                identity = canonical_call_identity(prepared)
-                if state.tool_call_count >= limits.max_tool_calls:
-                    state.record_feedback(_feedback(
-                        prepared.tool_name,
-                        LoopFeedbackType.TOOL_CALL_LIMIT_REACHED,
-                        "Tool-call limit reached",
-                    ))
-                    continue
-                if sum(
-                    canonical_call_identity(call) == identity
-                    for call in state.tool_history
-                ) >= limits.max_identical_tool_calls:
-                    state.record_feedback(_feedback(
-                        prepared.tool_name,
-                        LoopFeedbackType.IDENTICAL_TOOL_CALL_LIMIT_REACHED,
-                        "Identical tool-call limit reached",
-                    ))
-                    continue
+                    _record_selected_tool(decision_span, prepared)
+                    identity = canonical_call_identity(prepared)
+                    if state.tool_call_count >= limits.max_tool_calls:
+                        feedback = _feedback(
+                            prepared.tool_name,
+                            LoopFeedbackType.TOOL_CALL_LIMIT_REACHED,
+                            "Tool-call limit reached",
+                        )
+                        _mark_decision_error(
+                            decision_span,
+                            LoopFeedbackType.TOOL_CALL_LIMIT_REACHED,
+                            "Tool-call limit reached",
+                        )
+                        state.record_feedback(feedback)
+                        continue
+                    if sum(
+                        canonical_call_identity(call) == identity
+                        for call in state.tool_history
+                    ) >= limits.max_identical_tool_calls:
+                        feedback = _feedback(
+                            prepared.tool_name,
+                            LoopFeedbackType.IDENTICAL_TOOL_CALL_LIMIT_REACHED,
+                            "Identical tool-call limit reached",
+                        )
+                        _mark_decision_error(
+                            decision_span,
+                            LoopFeedbackType.IDENTICAL_TOOL_CALL_LIMIT_REACHED,
+                            "Identical tool-call limit reached",
+                        )
+                        state.record_feedback(feedback)
+                        continue
 
                 for attempt in range(2):
                     pending_call = prepared
