@@ -6,6 +6,9 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from openai import AsyncOpenAI
+from openinference.instrumentation import REDACTED_VALUE
+from openinference.instrumentation.openai import OpenAIInstrumentor
 from openinference.semconv.trace import (
     OpenInferenceSpanKindValues,
     SpanAttributes,
@@ -23,6 +26,7 @@ from agent_service.agent import (
     DebugDiagnosis,
     DebugSessionState,
     FinalAnswerDecision,
+    OpenAIDecisionProvider,
     ToolCallDecision,
     dispatch_tool_call,
     run_agent,
@@ -31,6 +35,7 @@ from agent_service.main import create_app
 from agent_service.observability import (
     DEFAULT_PROJECT_NAME,
     DEFAULT_SERVICE_NAME,
+    configure_openai_instrumentation,
     configure_tracing,
     get_tracer,
     shutdown_tracing,
@@ -50,10 +55,84 @@ class RecordingExporter(InMemorySpanExporter):
         super().shutdown()
 
 
+def sdk_final_response(
+    response_id: str,
+    *,
+    diagnosis: dict | None = None,
+    missing_evidence: str = "More evidence is needed",
+) -> dict:
+    diagnosis = diagnosis or {
+        "status": "INCONCLUSIVE",
+        "affected_endpoint": None,
+        "root_cause": None,
+        "evidence": [],
+        "missing_evidence": [missing_evidence],
+        "suggested_fix": None,
+    }
+    return {
+        "id": response_id,
+        "object": "response",
+        "created_at": 0,
+        "model": "gpt-6-sol",
+        "status": "completed",
+        "output": [
+            {
+                "type": "message",
+                "id": f"message-{response_id}",
+                "status": "completed",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(diagnosis),
+                        "annotations": [],
+                    }
+                ],
+            }
+        ],
+        "usage": {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens_details": {"reasoning_tokens": 1},
+        },
+    }
+
+
+def sdk_tool_response(response_id: str, *, arguments: str) -> dict:
+    return {
+        "id": response_id,
+        "object": "response",
+        "created_at": 0,
+        "model": "gpt-6-sol",
+        "status": "completed",
+        "output": [
+            {
+                "type": "function_call",
+                "id": f"function-{response_id}",
+                "status": "completed",
+                "name": "execute_api_request",
+                "call_id": f"call-{response_id}",
+                "arguments": arguments,
+            }
+        ],
+        "usage": {
+            "input_tokens": 8,
+            "output_tokens": 4,
+            "total_tokens": 12,
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens_details": {"reasoning_tokens": 1},
+        },
+    }
+
+
 def test_tracing_is_disabled_without_a_collector(monkeypatch) -> None:
     monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
 
     assert configure_tracing() is None
+    assert configure_openai_instrumentation(None) is None
     shutdown_tracing(None)
 
 
@@ -89,14 +168,43 @@ def test_repeated_app_lifespans_own_independent_non_global_providers() -> None:
         providers.append(provider)
         return provider
 
-    for _ in range(2):
+    async def make_model_request(response_id: str) -> None:
+        def respond(_: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json=sdk_final_response(response_id))
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(respond)
+        ) as http_client:
+            client = AsyncOpenAI(
+                api_key="test-key", http_client=http_client, max_retries=0
+            )
+            decision = await OpenAIDecisionProvider(client=client).next_decision(
+                DebugSessionState(session_id=response_id, issue="safe test")
+            )
+            assert decision.diagnosis.status == "INCONCLUSIVE"
+
+    instrumentor = OpenAIInstrumentor()
+    assert not instrumentor.is_instrumented_by_opentelemetry
+    for index in range(2):
         app = create_app(tracing_factory=tracing_factory)
         with TestClient(app):
             assert app.state.tracer_provider is providers[-1]
+            assert app.state.openai_instrumentor is instrumentor
+            assert instrumentor.is_instrumented_by_opentelemetry
+            asyncio.run(make_model_request(f"response-{index}"))
+        assert not instrumentor.is_instrumented_by_opentelemetry
 
     assert providers[0] is not providers[1]
     assert trace.get_tracer_provider() is global_provider
     assert [exporter.shutdown_count for exporter in exporters] == [1, 1]
+    assert [
+        sum(
+            span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+            == OpenInferenceSpanKindValues.LLM.value
+            for span in exporter.get_finished_spans()
+        )
+        for exporter in exporters
+    ] == [1, 1]
 
 
 class TraceProvider:
@@ -246,6 +354,251 @@ def test_debug_session_emits_safe_orchestration_hierarchy(monkeypatch) -> None:
     trace_data = repr([span.attributes for span in spans])
     assert "do-not-trace-this" not in trace_data
     assert "unknown" not in {span.name for span in spans}
+
+
+def test_real_openai_instrumentation_preserves_hierarchy_and_privacy(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    model_requests: list[dict] = []
+    response_marker = "do-not-trace-this-tool-observation"
+    diagnosis = {
+        "status": "RESOLVED",
+        "affected_endpoint": "POST /orders",
+        "root_cause": "do-not-trace-this-root-cause",
+        "evidence": [
+            {"source": "api_execution", "finding": "do-not-trace-this-evidence"}
+        ],
+        "missing_evidence": [],
+        "suggested_fix": "do-not-trace-this-suggested-fix",
+    }
+
+    def model_response(request: httpx.Request) -> httpx.Response:
+        model_requests.append(json.loads(request.content))
+        if len(model_requests) == 1:
+            arguments = json.dumps(
+                {
+                    "method": "POST",
+                    "path": "/orders",
+                    "body": json.dumps(
+                        {"api_key": "do-not-trace-this-model-tool-argument"}
+                    ),
+                }
+            )
+            return httpx.Response(
+                200,
+                json=sdk_tool_response("model-1", arguments=arguments),
+            )
+        assert response_marker in model_requests[1]["input"][0]["output"]
+        return httpx.Response(
+            200,
+            json=sdk_final_response("model-2", diagnosis=diagnosis),
+        )
+
+    def tool_response(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500,
+            json={"detail": response_marker},
+            headers={REQUEST_ID_HEADER: "request-5d"},
+        )
+
+    openai_http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(model_response)
+    )
+    openai_client = AsyncOpenAI(
+        api_key="sk-do-not-trace-this-api-key",
+        http_client=openai_http_client,
+        max_retries=0,
+    )
+    app = create_app(
+        lambda: OpenAIDecisionProvider(client=openai_client),
+        transport=httpx.MockTransport(tool_response),
+        tracing_factory=lambda: tracer_provider,
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/debug", json={"issue": "do-not-trace-this-user-issue"}
+        )
+    asyncio.run(openai_http_client.aclose())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "RESOLVED"
+    spans = exporter.get_finished_spans()
+    session = next(span for span in spans if span.name == "DebugSession")
+    decisions = [span for span in spans if span.name == "agent_decision"]
+    llm_spans = [
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.LLM.value
+    ]
+    tool = next(span for span in spans if span.name == "execute_api_request")
+
+    assert len(model_requests) == len(decisions) == len(llm_spans) == 2
+    assert [span.parent.span_id for span in llm_spans] == [
+        span.context.span_id for span in decisions
+    ]
+    assert all(span.context.trace_id == session.context.trace_id for span in spans)
+    assert tool.parent.span_id == session.context.span_id
+    assert all(span.parent.span_id != session.context.span_id for span in llm_spans)
+    assert "model_call" not in {span.name for span in spans}
+    assert all(
+        span.attributes[SpanAttributes.LLM_MODEL_NAME] == "gpt-6-sol"
+        for span in llm_spans
+    )
+    assert all(
+        span.attributes[SpanAttributes.LLM_TOKEN_COUNT_TOTAL] > 0
+        for span in llm_spans
+    )
+    assert all(
+        span.attributes[SpanAttributes.INPUT_VALUE] == REDACTED_VALUE
+        for span in llm_spans
+    )
+    assert all(
+        span.attributes[SpanAttributes.OUTPUT_VALUE] == REDACTED_VALUE
+        for span in llm_spans
+    )
+    assert not any(
+        key.startswith(("llm.input_messages", "llm.output_messages", "llm.tools"))
+        for span in llm_spans
+        for key in span.attributes
+    )
+    trace_data = repr([span.attributes for span in spans])
+    for secret in (
+        "do-not-trace-this-user-issue",
+        "do-not-trace-this-model-tool-argument",
+        response_marker,
+        "do-not-trace-this-root-cause",
+        "do-not-trace-this-evidence",
+        "do-not-trace-this-suggested-fix",
+        "sk-do-not-trace-this-api-key",
+    ):
+        assert secret not in trace_data
+
+
+def test_corrective_retry_creates_two_llm_spans_under_one_decision(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    requests: list[dict] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        if len(requests) == 1:
+            return httpx.Response(
+                200,
+                json=sdk_tool_response("invalid", arguments="{"),
+            )
+        return httpx.Response(200, json=sdk_final_response("corrected"))
+
+    openai_http_client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    openai_client = AsyncOpenAI(
+        api_key="test-key", http_client=openai_http_client, max_retries=0
+    )
+    app = create_app(
+        lambda: OpenAIDecisionProvider(client=openai_client),
+        tracing_factory=lambda: tracer_provider,
+    )
+    with TestClient(app) as client:
+        response = client.post("/debug", json={"issue": "format retry"})
+    asyncio.run(openai_http_client.aclose())
+
+    spans = exporter.get_finished_spans()
+    decisions = [span for span in spans if span.name == "agent_decision"]
+    llm_spans = [
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.LLM.value
+    ]
+    tool_spans = [
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.TOOL.value
+    ]
+    assert response.json()["status"] == "INCONCLUSIVE"
+    assert len(requests) == len(llm_spans) == 2
+    assert len(decisions) == 1
+    assert tool_spans == []
+    assert all(
+        span.parent.span_id == decisions[0].context.span_id for span in llm_spans
+    )
+    assert "could not be accepted" in requests[1]["input"][1]["content"]
+
+
+def test_tracing_disabled_leaves_real_openai_sdk_uninstrumented(monkeypatch) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+
+    def respond(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=sdk_final_response("disabled"))
+
+    openai_http_client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    openai_client = AsyncOpenAI(
+        api_key="test-key", http_client=openai_http_client, max_retries=0
+    )
+    instrumentor = OpenAIInstrumentor()
+    app = create_app(lambda: OpenAIDecisionProvider(client=openai_client))
+    with TestClient(app) as client:
+        assert app.state.tracer_provider is None
+        assert app.state.openai_instrumentor is None
+        assert not instrumentor.is_instrumented_by_opentelemetry
+        response = client.post("/debug", json={"issue": "tracing disabled"})
+    asyncio.run(openai_http_client.aclose())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "INCONCLUSIVE"
+    assert not instrumentor.is_instrumented_by_opentelemetry
+
+
+def test_openai_api_failure_marks_llm_and_decision_spans_as_errors(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    requests = 0
+
+    def fail(_: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(
+            500,
+            json={"error": {"message": "Temporary failure", "type": "server_error"}},
+        )
+
+    openai_http_client = httpx.AsyncClient(transport=httpx.MockTransport(fail))
+    openai_client = AsyncOpenAI(
+        api_key="test-key", http_client=openai_http_client, max_retries=0
+    )
+    app = create_app(
+        lambda: OpenAIDecisionProvider(client=openai_client),
+        tracing_factory=lambda: tracer_provider,
+    )
+    with TestClient(app) as client:
+        response = client.post("/debug", json={"issue": "model unavailable"})
+    asyncio.run(openai_http_client.aclose())
+
+    spans = exporter.get_finished_spans()
+    llm = next(
+        span
+        for span in spans
+        if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
+        == OpenInferenceSpanKindValues.LLM.value
+    )
+    decision = next(span for span in spans if span.name == "agent_decision")
+    assert requests == 1
+    assert response.json()["status"] == "INCONCLUSIVE"
+    assert llm.status.status_code is StatusCode.ERROR
+    assert decision.status.status_code is StatusCode.ERROR
+    assert decision.attributes[ERROR_TYPE] == "MODEL_API_ERROR"
 
 
 @pytest.mark.asyncio

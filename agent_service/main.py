@@ -23,8 +23,10 @@ from agent_service.agent import (
 from agent_service.agent.schemas import NonEmptyStr
 from agent_service.observability import (
     TracerProvider,
+    configure_openai_instrumentation,
     configure_tracing,
     get_tracer,
+    shutdown_openai_instrumentation,
     shutdown_tracing,
 )
 from sandbox_api.db import Database
@@ -118,15 +120,22 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         tracer_provider = tracing_factory()
-        app.state.tracer_provider = tracer_provider
-        app.state.tracer = get_tracer(tracer_provider)
+        openai_instrumentor = None
         try:
+            openai_instrumentor = configure_openai_instrumentation(tracer_provider)
+            app.state.tracer_provider = tracer_provider
+            app.state.tracer = get_tracer(tracer_provider)
+            app.state.openai_instrumentor = openai_instrumentor
             yield
         finally:
-            shutdown_tracing(tracer_provider)
+            try:
+                shutdown_openai_instrumentation(openai_instrumentor)
+            finally:
+                shutdown_tracing(tracer_provider)
 
     app = FastAPI(title="APILens Agent Service", lifespan=lifespan)
     app.state.tracer = get_tracer(None)
+    app.state.openai_instrumentor = None
 
     @app.post("/debug", response_model=DebugDiagnosis)
     async def debug(request: DebugRequest) -> DebugDiagnosis:
