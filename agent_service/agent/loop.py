@@ -1,4 +1,5 @@
 import asyncio
+import json
 from enum import StrEnum
 from typing import Protocol
 
@@ -13,6 +14,8 @@ from agent_service.agent.dispatch import (
 from agent_service.agent.schemas import (
     AgentDecision,
     DebugDiagnosis,
+    EvidenceItem,
+    EvidenceSource,
     FinalAnswerDecision,
     Observation,
     ToolCallRecord,
@@ -37,12 +40,32 @@ class LoopFeedbackType(StrEnum):
     SESSION_TIMEOUT = "SESSION_TIMEOUT"
 
 
+EVIDENCE_SOURCE_BY_TOOL = {
+    "inspect_api_spec": EvidenceSource.API_SPEC,
+    "execute_api_request": EvidenceSource.API_EXECUTION,
+    "inspect_server_logs": EvidenceSource.SERVER_LOGS,
+    "inspect_endpoint_implementation": EvidenceSource.ENDPOINT_IMPLEMENTATION,
+}
+
+
 def _feedback(tool_name: str, error_type: LoopFeedbackType, message: str) -> Observation:
     return Observation(
         tool_name=tool_name,
         success=False,
         error={"type": error_type.value, "message": message},
     )
+
+
+def _collected_evidence(state: DebugSessionState) -> list[EvidenceItem]:
+    return [
+        EvidenceItem(
+            source=EVIDENCE_SOURCE_BY_TOOL[observation.tool_name],
+            finding=json.dumps(observation.data, ensure_ascii=False, sort_keys=True),
+            reference=observation.request_id,
+        )
+        for observation in state.observations
+        if observation.success and observation.tool_name in EVIDENCE_SOURCE_BY_TOOL
+    ]
 
 
 async def run_agent(
@@ -139,4 +162,8 @@ async def run_agent(
         reason = "Agent decision limit reached"
 
     state.mark_completed()
-    return DebugDiagnosis(status="LIMIT_REACHED", missing_evidence=[reason])
+    return DebugDiagnosis(
+        status="LIMIT_REACHED",
+        evidence=_collected_evidence(state),
+        missing_evidence=[reason],
+    )

@@ -278,14 +278,23 @@ async def test_non_timeout_phase_two_failure_does_not_retry() -> None:
 
 @pytest.mark.asyncio
 async def test_decision_limit_never_requests_extra_decision() -> None:
-    provider = ScriptedProvider(tool("unknown"), tool("unknown"))
+    provider = ScriptedProvider(
+        tool("inspect_endpoint_implementation", method="GET", path="/products/1"),
+        tool("unknown"),
+    )
     state = DebugSessionState(session_id="id", issue="budget")
     diagnosis = await run_agent(
         state, provider, limits=AgentLimits(max_agent_decisions=2)
     )
     assert diagnosis.status == "LIMIT_REACHED"
+    assert len(diagnosis.evidence) == 1
+    assert diagnosis.evidence[0].source == "endpoint_implementation"
+    assert '"path": "/products/{product_id}"' in diagnosis.evidence[0].finding
     assert diagnosis.missing_evidence == ["Agent decision limit reached"]
     assert state.step_count == len(provider.snapshots) == 2
+    assert len(state.observations) == 2
+    assert state.observations[0].success
+    assert state.observations[1].error["type"] == "TOOL_NOT_FOUND"
     assert state.status is SessionStatus.COMPLETED
 
     final_state = DebugSessionState(session_id="final", issue="last decision")
@@ -304,6 +313,12 @@ async def test_session_deadline_interrupts_awaited_provider() -> None:
 
         async def next_decision(self, state: DebugSessionState):
             self.calls += 1
+            if self.calls == 1:
+                return tool(
+                    "inspect_endpoint_implementation",
+                    method="GET",
+                    path="/products/1",
+                )
             await asyncio.sleep(10)
             return final()
 
@@ -313,8 +328,11 @@ async def test_session_deadline_interrupts_awaited_provider() -> None:
         state, provider, limits=AgentLimits(session_timeout_seconds=1)
     )
     assert diagnosis.status == "LIMIT_REACHED"
+    assert len(diagnosis.evidence) == 1
+    assert diagnosis.evidence[0].source == "endpoint_implementation"
     assert diagnosis.missing_evidence == ["Session timeout reached"]
-    assert provider.calls == 1 and state.step_count == 0
+    assert provider.calls == 2 and state.step_count == 1
+    assert len(state.observations) == 1 and state.observations[0].success
     assert state.status is SessionStatus.COMPLETED
 
 
