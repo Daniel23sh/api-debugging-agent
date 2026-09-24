@@ -1,6 +1,7 @@
 import os
 
-from openinference.instrumentation import TracerProvider
+from openinference.instrumentation import TraceConfig, TracerProvider
+from openinference.instrumentation.openai import OpenAIInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
 from opentelemetry.trace import NoOpTracerProvider, Tracer
@@ -46,6 +47,26 @@ def configure_tracing(
 
 def get_tracer(provider: TracerProvider | None) -> Tracer:
     return (provider or _NOOP_PROVIDER).get_tracer(INSTRUMENTATION_SCOPE)
+
+
+def configure_openai_instrumentation(
+    provider: TracerProvider | None,
+) -> OpenAIInstrumentor | None:
+    if provider is None:
+        return None
+    instrumentor = OpenAIInstrumentor()
+    instrumentor.instrument(
+        tracer_provider=provider,
+        config=TraceConfig(hide_inputs=True, hide_outputs=True),
+    )
+    return instrumentor
+
+
+def shutdown_openai_instrumentation(
+    instrumentor: OpenAIInstrumentor | None,
+) -> None:
+    if instrumentor is not None:
+        instrumentor.uninstrument()
 
 
 def shutdown_tracing(provider: TracerProvider | None) -> None:
