@@ -9,9 +9,12 @@ description = "Foundation for the APILens API Debugging Agent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "arize-phoenix-otel>=0.17.1",
     "fastapi>=0.115.0",
     "httpx>=0.27.0",
+    "openinference-instrumentation>=0.1.65",
     "openai>=3.19.0",
+    "opentelemetry-sdk>=1.44.0",
     "pydantic>=2.7.0",
     "python-dotenv>=1.0.1",
     "uvicorn>=0.30.0",

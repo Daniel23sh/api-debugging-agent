@@ -13,7 +13,8 @@ python -m pip install -e ".[dev]"
 ```
 
 Copy `.env.example` to `.env` and set values as needed, including your OpenAI
-API key.
+API key. Tracing exports to Phoenix over OTLP/HTTP when
+`PHOENIX_COLLECTOR_ENDPOINT` is set; leave it unset to disable trace export.
 
 Run the Sandbox API and Agent Service in separate terminals:
 
