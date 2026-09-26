@@ -481,5 +481,93 @@
       "method": "GET",
       "path": "/orders/1"
     }
+  },
+  {
+    "case_id": "order_create_status_no_bug",
+    "case_kind": "no_bug",
+    "bug_id": null,
+    "user_report": "POST /orders accepted {\"product_id\": 1, \"quantity\": 1} but returned 201 Created. Our client expects 200 OK; is the endpoint using the wrong success status?",
+    "endpoint": "/orders",
+    "category": null,
+    "expected_root_cause": null,
+    "expected_status": 201,
+    "actual_status": 201,
+    "required_evidence": [
+      "the API contract documents HTTP 201 for successful POST /orders",
+      "POST /orders with product 1 and quantity 1 returns HTTP 201"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request"
+    ],
+    "forbidden_or_unnecessary_tools": [
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "expected_final_status": "NO_BUG_FOUND",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": null,
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 1, "quantity": 1}
+    }
+  },
+  {
+    "case_id": "inventory_update_status_no_bug",
+    "case_kind": "no_bug",
+    "bug_id": null,
+    "user_report": "PATCH /inventory/1 with {\"quantity\": 1} returns 200 and an inventory object. We expected 204 No Content, so the response looks wrong.",
+    "endpoint": "/inventory/{product_id}",
+    "category": null,
+    "expected_root_cause": null,
+    "expected_status": 200,
+    "actual_status": 200,
+    "required_evidence": [
+      "the API contract documents HTTP 200 for a successful inventory update",
+      "PATCH /inventory/1 with quantity 1 returns HTTP 200 and represents quantity 1"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request"
+    ],
+    "forbidden_or_unnecessary_tools": [
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "expected_final_status": "NO_BUG_FOUND",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": null,
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "PATCH",
+      "path": "/inventory/1",
+      "body": {"quantity": 1}
+    }
+  },
+  {
+    "case_id": "insufficient_report_no_endpoint",
+    "case_kind": "inconclusive",
+    "bug_id": null,
+    "user_report": "An API call from our integration failed earlier, but we did not capture which operation ran, its request data, the response status, or a request ID. Can you determine what went wrong?",
+    "endpoint": null,
+    "category": null,
+    "expected_root_cause": null,
+    "expected_status": null,
+    "actual_status": null,
+    "required_evidence": [],
+    "acceptable_tools": [],
+    "forbidden_or_unnecessary_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "expected_final_status": "INCONCLUSIVE",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": null,
+    "setup_requests": [],
+    "reproduction_request": null
   }
 ]
