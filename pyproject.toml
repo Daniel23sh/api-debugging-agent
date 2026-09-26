@@ -35,4 +35,4 @@ testpaths = ["tests"]
 target-version = "py311"
 
 [tool.setuptools.packages.find]
-include = ["agent_service*", "sandbox_api*"]
+include = ["agent_service*", "evaluation*", "sandbox_api*"]
