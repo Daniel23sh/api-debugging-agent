@@ -1,0 +1,485 @@
+[
+  {
+    "case_id": "inventory_validation_zero_01",
+    "case_kind": "bug",
+    "bug_id": "INVENTORY_VALIDATION_001",
+    "user_report": "PATCH /inventory/1 rejects a quantity of zero with HTTP 422.",
+    "endpoint": "/inventory/{product_id}",
+    "category": "validation_mismatch",
+    "expected_root_cause": "InventoryUpdate enforces quantity > 0 while its OpenAPI schema documents quantity >= 0.",
+    "expected_status": 200,
+    "actual_status": 422,
+    "required_evidence": [
+      "OpenAPI quantity schema has minimum 0",
+      "PATCH /inventory/1 with quantity 0 returns 422",
+      "runtime model uses a strict greater-than-zero constraint"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "inventory_validation_zero",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "PATCH",
+      "path": "/inventory/1",
+      "body": {"quantity": 0}
+    }
+  },
+  {
+    "case_id": "inventory_validation_zero_02",
+    "case_kind": "bug",
+    "bug_id": "INVENTORY_VALIDATION_001",
+    "user_report": "Setting product 1 inventory to zero should succeed, but PATCH /inventory/1 returns 422 instead of 200.",
+    "endpoint": "/inventory/{product_id}",
+    "category": "validation_mismatch",
+    "expected_root_cause": "InventoryUpdate enforces quantity > 0 while its OpenAPI schema documents quantity >= 0.",
+    "expected_status": 200,
+    "actual_status": 422,
+    "required_evidence": [
+      "OpenAPI quantity schema has minimum 0",
+      "PATCH /inventory/1 with quantity 0 returns 422",
+      "runtime model uses a strict greater-than-zero constraint"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "inventory_validation_zero",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "PATCH",
+      "path": "/inventory/1",
+      "body": {"quantity": 0}
+    }
+  },
+  {
+    "case_id": "inventory_validation_zero_03",
+    "case_kind": "bug",
+    "bug_id": "INVENTORY_VALIDATION_001",
+    "user_report": "Our stock sync sends {\"quantity\": 0} to PATCH /inventory/1 when an item sells out, and the API responds with 422 even though zero is a valid inventory level.",
+    "endpoint": "/inventory/{product_id}",
+    "category": "validation_mismatch",
+    "expected_root_cause": "InventoryUpdate enforces quantity > 0 while its OpenAPI schema documents quantity >= 0.",
+    "expected_status": 200,
+    "actual_status": 422,
+    "required_evidence": [
+      "OpenAPI quantity schema has minimum 0",
+      "PATCH /inventory/1 with quantity 0 returns 422",
+      "runtime model uses a strict greater-than-zero constraint"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "inventory_validation_zero",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "PATCH",
+      "path": "/inventory/1",
+      "body": {"quantity": 0}
+    }
+  },
+  {
+    "case_id": "product_missing_status_01",
+    "case_kind": "bug",
+    "bug_id": "PRODUCT_STATUS_001",
+    "user_report": "GET /products/999 returns HTTP 200 with an empty object for a product that does not exist.",
+    "endpoint": "/products/{product_id}",
+    "category": "wrong_status_or_response",
+    "expected_root_cause": "The product-999 not-found branch returns an empty 200 response.",
+    "expected_status": 404,
+    "actual_status": 200,
+    "required_evidence": [
+      "product 999 is absent from deterministic fixtures",
+      "GET /products/999 returns 200",
+      "response body is an empty object"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "product_missing_status",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/products/999"
+    }
+  },
+  {
+    "case_id": "product_missing_status_02",
+    "case_kind": "bug",
+    "bug_id": "PRODUCT_STATUS_001",
+    "user_report": "A missing product should return 404, but requesting GET /products/999 succeeds with status 200 and body {}.",
+    "endpoint": "/products/{product_id}",
+    "category": "wrong_status_or_response",
+    "expected_root_cause": "The product-999 not-found branch returns an empty 200 response.",
+    "expected_status": 404,
+    "actual_status": 200,
+    "required_evidence": [
+      "product 999 is absent from deterministic fixtures",
+      "GET /products/999 returns 200",
+      "response body is an empty object"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "product_missing_status",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/products/999"
+    }
+  },
+  {
+    "case_id": "product_missing_status_03",
+    "case_kind": "bug",
+    "bug_id": "PRODUCT_STATUS_001",
+    "user_report": "Our client looked up product 999 and treated the request as successful because the API returned 200 with empty JSON; we expected a not-found response.",
+    "endpoint": "/products/{product_id}",
+    "category": "wrong_status_or_response",
+    "expected_root_cause": "The product-999 not-found branch returns an empty 200 response.",
+    "expected_status": 404,
+    "actual_status": 200,
+    "required_evidence": [
+      "product 999 is absent from deterministic fixtures",
+      "GET /products/999 returns 200",
+      "response body is an empty object"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "product_missing_status",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/products/999"
+    }
+  },
+  {
+    "case_id": "order_total_quantity_01",
+    "case_kind": "bug",
+    "bug_id": "ORDER_TOTAL_001",
+    "user_report": "POST /orders returns the wrong total when ordering two units of product 2.",
+    "endpoint": "/orders",
+    "category": "business_logic",
+    "expected_root_cause": "Product 2 order totals use the unit price without multiplying by quantity.",
+    "expected_status": 201,
+    "actual_status": 201,
+    "required_evidence": [
+      "product 2 unit price is 129.50",
+      "requested quantity is 2",
+      "created order total is 129.50",
+      "inventory is reduced by 2"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_total_quantity",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 2, "quantity": 2}
+    }
+  },
+  {
+    "case_id": "order_total_quantity_02",
+    "case_kind": "bug",
+    "bug_id": "ORDER_TOTAL_001",
+    "user_report": "An order for two of product 2 should total 259.00, but POST /orders returns 201 with a total of 129.50.",
+    "endpoint": "/orders",
+    "category": "business_logic",
+    "expected_root_cause": "Product 2 order totals use the unit price without multiplying by quantity.",
+    "expected_status": 201,
+    "actual_status": 201,
+    "required_evidence": [
+      "product 2 unit price is 129.50",
+      "requested quantity is 2",
+      "created order total is 129.50",
+      "inventory is reduced by 2"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_total_quantity",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 2, "quantity": 2}
+    }
+  },
+  {
+    "case_id": "order_total_quantity_03",
+    "case_kind": "bug",
+    "bug_id": "ORDER_TOTAL_001",
+    "user_report": "Checkout sent {\"product_id\": 2, \"quantity\": 2} to POST /orders. The order was accepted and stock fell from 5 to 3, but the response total was only 129.50.",
+    "endpoint": "/orders",
+    "category": "business_logic",
+    "expected_root_cause": "Product 2 order totals use the unit price without multiplying by quantity.",
+    "expected_status": 201,
+    "actual_status": 201,
+    "required_evidence": [
+      "product 2 unit price is 129.50",
+      "requested quantity is 2",
+      "created order total is 129.50",
+      "inventory is reduced by 2"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_total_quantity",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 2, "quantity": 2}
+    }
+  },
+  {
+    "case_id": "order_missing_inventory_01",
+    "case_kind": "bug",
+    "bug_id": "ORDER_INVENTORY_NULL_001",
+    "user_report": "POST /orders returns HTTP 500 when I order product 4.",
+    "endpoint": "/orders",
+    "category": "runtime_exception",
+    "expected_root_cause": "Order creation subscripts a missing inventory row without a null check.",
+    "expected_status": 404,
+    "actual_status": 500,
+    "required_evidence": [
+      "product 4 exists but has no inventory row",
+      "POST /orders returns 500 and X-Request-ID",
+      "correlated request_failed log contains a NoneType TypeError"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": [],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_missing_inventory",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 4, "quantity": 1}
+    }
+  },
+  {
+    "case_id": "order_missing_inventory_02",
+    "case_kind": "bug",
+    "bug_id": "ORDER_INVENTORY_NULL_001",
+    "user_report": "Creating an order for one unit of product 4 should fail cleanly with 404, but the endpoint responds with 500.",
+    "endpoint": "/orders",
+    "category": "runtime_exception",
+    "expected_root_cause": "Order creation subscripts a missing inventory row without a null check.",
+    "expected_status": 404,
+    "actual_status": 500,
+    "required_evidence": [
+      "product 4 exists but has no inventory row",
+      "POST /orders returns 500 and X-Request-ID",
+      "correlated request_failed log contains a NoneType TypeError"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": [],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_missing_inventory",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 4, "quantity": 1}
+    }
+  },
+  {
+    "case_id": "order_missing_inventory_03",
+    "case_kind": "bug",
+    "bug_id": "ORDER_INVENTORY_NULL_001",
+    "user_report": "Sending {\"product_id\": 4, \"quantity\": 1} to POST /orders gives an internal server error instead of the expected not-found response.",
+    "endpoint": "/orders",
+    "category": "runtime_exception",
+    "expected_root_cause": "Order creation subscripts a missing inventory row without a null check.",
+    "expected_status": 404,
+    "actual_status": 500,
+    "required_evidence": [
+      "product 4 exists but has no inventory row",
+      "POST /orders returns 500 and X-Request-ID",
+      "correlated request_failed log contains a NoneType TypeError"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_server_logs",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": [],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_missing_inventory",
+    "setup_requests": [],
+    "reproduction_request": {
+      "method": "POST",
+      "path": "/orders",
+      "body": {"product_id": 4, "quantity": 1}
+    }
+  },
+  {
+    "case_id": "order_response_schema_01",
+    "case_kind": "bug",
+    "bug_id": "ORDER_RESPONSE_SCHEMA_001",
+    "user_report": "GET /orders/1 returns productId instead of product_id.",
+    "endpoint": "/orders/{order_id}",
+    "category": "field_schema_mismatch",
+    "expected_root_cause": "The order response bypasses its Pydantic response model and renames product_id.",
+    "expected_status": 200,
+    "actual_status": 200,
+    "required_evidence": [
+      "OpenAPI Order schema requires product_id",
+      "GET /orders/1 response contains productId",
+      "GET /orders/1 response omits product_id"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_response_schema",
+    "setup_requests": [
+      {
+        "method": "POST",
+        "path": "/orders",
+        "body": {"product_id": 1, "quantity": 1}
+      }
+    ],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/orders/1"
+    }
+  },
+  {
+    "case_id": "order_response_schema_02",
+    "case_kind": "bug",
+    "bug_id": "ORDER_RESPONSE_SCHEMA_001",
+    "user_report": "The order response should include the documented product_id field, but GET /orders/1 returns 200 with productId and no product_id.",
+    "endpoint": "/orders/{order_id}",
+    "category": "field_schema_mismatch",
+    "expected_root_cause": "The order response bypasses its Pydantic response model and renames product_id.",
+    "expected_status": 200,
+    "actual_status": 200,
+    "required_evidence": [
+      "OpenAPI Order schema requires product_id",
+      "GET /orders/1 response contains productId",
+      "GET /orders/1 response omits product_id"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_response_schema",
+    "setup_requests": [
+      {
+        "method": "POST",
+        "path": "/orders",
+        "body": {"product_id": 1, "quantity": 1}
+      }
+    ],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/orders/1"
+    }
+  },
+  {
+    "case_id": "order_response_schema_03",
+    "case_kind": "bug",
+    "bug_id": "ORDER_RESPONSE_SCHEMA_001",
+    "user_report": "After creating an order for product 1, our client fetches /orders/1 but cannot deserialize the JSON because product_id is absent and productId is returned instead.",
+    "endpoint": "/orders/{order_id}",
+    "category": "field_schema_mismatch",
+    "expected_root_cause": "The order response bypasses its Pydantic response model and renames product_id.",
+    "expected_status": 200,
+    "actual_status": 200,
+    "required_evidence": [
+      "OpenAPI Order schema requires product_id",
+      "GET /orders/1 response contains productId",
+      "GET /orders/1 response omits product_id"
+    ],
+    "acceptable_tools": [
+      "inspect_api_spec",
+      "execute_api_request",
+      "inspect_endpoint_implementation"
+    ],
+    "forbidden_or_unnecessary_tools": ["inspect_server_logs"],
+    "expected_final_status": "RESOLVED",
+    "fixture_id": "sandbox-v1",
+    "paraphrase_group": "order_response_schema",
+    "setup_requests": [
+      {
+        "method": "POST",
+        "path": "/orders",
+        "body": {"product_id": 1, "quantity": 1}
+      }
+    ],
+    "reproduction_request": {
+      "method": "GET",
+      "path": "/orders/1"
+    }
+  }
+]
