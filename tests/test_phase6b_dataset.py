@@ -22,9 +22,17 @@ STANDARD_TOOLS = {
 ALL_TOOLS = STANDARD_TOOLS | {"inspect_server_logs"}
 
 
+def _bug_cases() -> list:
+    return [
+        case
+        for case in load_evaluation_cases(DATASET_PATH)
+        if case.case_kind == "bug"
+    ]
+
+
 def _cases_by_bug() -> dict[str, list]:
     grouped = defaultdict(list)
-    for case in load_evaluation_cases(DATASET_PATH):
+    for case in _bug_cases():
         grouped[case.bug_id].append(case)
     return grouped
 
@@ -38,7 +46,7 @@ def _expected_reproduction(ground_truth: BugGroundTruth) -> HttpRequest:
 
 
 def test_v1_positive_dataset_has_five_groups_of_three_bug_cases() -> None:
-    cases = load_evaluation_cases(DATASET_PATH)
+    cases = _bug_cases()
     counts = Counter(case.bug_id for case in cases)
 
     assert len(cases) == 15
@@ -113,7 +121,7 @@ def test_only_order_response_schema_cases_have_structured_setup() -> None:
         )
     ]
 
-    for case in load_evaluation_cases(DATASET_PATH):
+    for case in _bug_cases():
         if case.bug_id == "ORDER_RESPONSE_SCHEMA_001":
             assert case.setup_requests == expected_setup
         else:
@@ -121,7 +129,7 @@ def test_only_order_response_schema_cases_have_structured_setup() -> None:
 
 
 def test_tool_ground_truth_allows_alternate_trajectories() -> None:
-    for case in load_evaluation_cases(DATASET_PATH):
+    for case in _bug_cases():
         if case.bug_id == "ORDER_INVENTORY_NULL_001":
             assert case.acceptable_tools == ALL_TOOLS
             assert case.forbidden_or_unnecessary_tools == set()
