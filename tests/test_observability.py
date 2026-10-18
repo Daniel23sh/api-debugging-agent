@@ -15,11 +15,13 @@ from openinference.semconv.trace import (
     ToolCallAttributes,
 )
 from opentelemetry import trace
+from opentelemetry.sdk.trace import Event, ReadableSpan
+from opentelemetry.sdk.trace.export import SpanExportResult
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
 from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
-from opentelemetry.trace import StatusCode
+from opentelemetry.trace import Link, SpanContext, SpanKind, Status, StatusCode
 from phoenix.otel import PROJECT_NAME
 
 from agent_service.agent import (
@@ -36,6 +38,7 @@ from agent_service.main import create_app
 from agent_service.observability import (
     DEFAULT_PROJECT_NAME,
     DEFAULT_SERVICE_NAME,
+    _ErrorSanitizingExporter,
     configure_openai_instrumentation,
     configure_tracing,
     get_tracer,
@@ -160,6 +163,77 @@ def test_tracing_supports_an_in_memory_exporter(monkeypatch) -> None:
         "foundation-test"
     ]
     assert exporter.shutdown_count == 1
+
+
+def test_error_export_sanitizes_copies_and_forwards_exporter_lifecycle() -> None:
+    class Delegate(RecordingExporter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.flush_timeouts: list[int] = []
+
+        def export(self, spans) -> SpanExportResult:
+            super().export(spans)
+            return SpanExportResult.FAILURE
+
+        def force_flush(self, timeout_millis: int = 30000) -> bool:
+            self.flush_timeouts.append(timeout_millis)
+            return False
+
+    private_marker = "PRIVATE_OPENAI_ERROR_MARKER_DO_NOT_EXPORT"
+    attributes = {
+        SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.LLM.value,
+        SpanAttributes.LLM_MODEL_NAME: "test-model",
+        SpanAttributes.LLM_PROVIDER: "openai",
+        SpanAttributes.LLM_TOKEN_COUNT_TOTAL: 15,
+        "exception.message": private_marker,
+    }
+    event = Event("exception", timestamp=2, attributes={
+        "exception.type": "openai.BadRequestError",
+        "exception.message": private_marker,
+        "exception.stacktrace": private_marker,
+    })
+    original = ReadableSpan(
+        name="Response",
+        context=SpanContext(trace_id=1, span_id=2, is_remote=False),
+        parent=SpanContext(trace_id=1, span_id=1, is_remote=False),
+        kind=SpanKind.CLIENT,
+        attributes=attributes,
+        events=[event],
+        links=[Link(SpanContext(trace_id=3, span_id=4, is_remote=False))],
+        status=Status(StatusCode.ERROR, private_marker),
+        start_time=1,
+        end_time=3,
+    )
+    unchanged = ReadableSpan(name="DebugSession", status=Status(StatusCode.OK))
+    delegate = Delegate()
+    exporter = _ErrorSanitizingExporter(delegate)
+
+    assert exporter.export([original, unchanged]) is SpanExportResult.FAILURE
+    sanitized, passed_through = delegate.get_finished_spans()
+    assert passed_through is unchanged
+    assert sanitized is not original
+    for field in (
+        "name", "context", "parent", "resource", "links", "kind",
+        "start_time", "end_time", "instrumentation_scope",
+    ):
+        assert getattr(sanitized, field) == getattr(original, field)
+    assert sanitized.status.status_code is StatusCode.ERROR
+    assert sanitized.status.description == "LLM request failed"
+    assert sanitized.attributes == {**attributes, "exception.message": REDACTED_VALUE}
+    assert sanitized.events[0].timestamp == event.timestamp
+    assert sanitized.events[0].attributes == {
+        "exception.type": "openai.BadRequestError",
+        "exception.message": REDACTED_VALUE,
+        "exception.stacktrace": REDACTED_VALUE,
+    }
+    assert original.status.description == private_marker
+    assert original.attributes["exception.message"] == private_marker
+    assert original.events[0].attributes["exception.message"] == private_marker
+    assert original.events[0].attributes["exception.stacktrace"] == private_marker
+    assert exporter.force_flush(1234) is False
+    assert delegate.flush_timeouts == [1234]
+    exporter.shutdown()
+    assert delegate.shutdown_count == 1
 
 
 def test_repeated_app_lifespans_own_independent_non_global_providers() -> None:
@@ -667,21 +741,33 @@ def test_tracing_disabled_leaves_real_openai_sdk_uninstrumented(monkeypatch) -> 
     assert not instrumentor.is_instrumented_by_opentelemetry
 
 
-def test_openai_api_failure_marks_llm_and_decision_spans_as_errors(
+@pytest.mark.parametrize("production_export", [False, True])
+@pytest.mark.parametrize("status_code", [400, 500])
+def test_openai_api_failure_exports_safe_error_spans(
     monkeypatch,
+    production_export: bool,
+    status_code: int,
 ) -> None:
     monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
     exporter = RecordingExporter()
-    tracer_provider = configure_tracing(span_exporter=exporter)
+    if production_export:
+        monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "http://phoenix.test:6006")
+        monkeypatch.setattr(
+            "agent_service.observability.HTTPSpanExporter", lambda: exporter
+        )
+        tracer_provider = configure_tracing()
+    else:
+        tracer_provider = configure_tracing(span_exporter=exporter)
     assert tracer_provider is not None
     requests = 0
+    private_marker = "PRIVATE_OPENAI_ERROR_MARKER_DO_NOT_EXPORT"
 
     def fail(_: httpx.Request) -> httpx.Response:
         nonlocal requests
         requests += 1
         return httpx.Response(
-            500,
-            json={"error": {"message": "Temporary failure", "type": "server_error"}},
+            status_code,
+            json={"error": {"message": private_marker, "type": "server_error"}},
         )
 
     openai_http_client = httpx.AsyncClient(transport=httpx.MockTransport(fail))
@@ -694,21 +780,46 @@ def test_openai_api_failure_marks_llm_and_decision_spans_as_errors(
     )
     with TestClient(app) as client:
         response = client.post("/debug", json={"issue": "model unavailable"})
+        assert tracer_provider.force_flush()
+        assert len(exporter.get_finished_spans()) == 4
     asyncio.run(openai_http_client.aclose())
 
     spans = exporter.get_finished_spans()
-    llm = next(
+    llm_spans = [
         span
         for span in spans
         if span.attributes.get(SpanAttributes.OPENINFERENCE_SPAN_KIND)
         == OpenInferenceSpanKindValues.LLM.value
-    )
+    ]
+    assert len(llm_spans) == 1
+    llm = llm_spans[0]
+    session = next(span for span in spans if span.name == "DebugSession")
     decision = next(span for span in spans if span.name == "agent_decision")
+    final = next(span for span in spans if span.name == "final_diagnosis")
     assert requests == 1
     assert response.json()["status"] == "INCONCLUSIVE"
     assert llm.status.status_code is StatusCode.ERROR
+    assert llm.instrumentation_scope.name == "openinference.instrumentation.openai"
     assert decision.status.status_code is StatusCode.ERROR
     assert decision.attributes[ERROR_TYPE] == "MODEL_API_ERROR"
+    assert session.parent is None
+    assert decision.parent.span_id == session.context.span_id
+    assert final.parent.span_id == session.context.span_id
+    assert llm.parent.span_id == decision.context.span_id
+    assert all(span.context.trace_id == session.context.trace_id for span in spans)
+    assert len(spans) == 4
+    exception = next(event for event in llm.events if event.name == "exception")
+    assert exception.attributes["exception.type"].endswith(
+        "BadRequestError" if status_code == 400 else "InternalServerError"
+    )
+    assert exporter.shutdown_count == 1
+    for span in spans:
+        assert private_marker not in repr(span.attributes)
+        assert private_marker not in str(span.status.description)
+        for event in span.events:
+            assert private_marker not in repr(event.attributes)
+            assert private_marker not in str(event.attributes.get("exception.message"))
+            assert private_marker not in str(event.attributes.get("exception.stacktrace"))
 
 
 @pytest.mark.asyncio
