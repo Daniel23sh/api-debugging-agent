@@ -88,6 +88,10 @@ DebugSession
 
 ## Tests
 
+Phase 7 evaluator APIs, metric semantics and the six-case human calibration
+workflow are documented in [evaluation/README.md](evaluation/README.md).
+Live judging requires an explicit `EVAL_JUDGE_MODEL`; ordinary tests are offline.
+
 ```bash
 pytest
 ruff check .

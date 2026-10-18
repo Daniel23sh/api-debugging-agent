@@ -18,6 +18,7 @@ from agent_service.agent.dispatch import (
     dispatch_tool_call,
     prepare_tool_call,
 )
+from agent_service.agent.recording import SessionRecorder, current_recorder
 from agent_service.agent.schemas import (
     AgentDecision,
     DebugDiagnosis,
@@ -58,7 +59,9 @@ EVIDENCE_SOURCE_BY_TOOL = {
 }
 
 
-def _feedback(tool_name: str, error_type: LoopFeedbackType, message: str) -> Observation:
+def _feedback(
+    tool_name: str, error_type: LoopFeedbackType, message: str
+) -> Observation:
     return Observation(
         tool_name=tool_name,
         success=False,
@@ -108,10 +111,46 @@ async def run_agent(
     transport: httpx.AsyncBaseTransport | None = None,
     database: Database | None = None,
     tracer: Tracer | None = None,
+    recorder: SessionRecorder | None = None,
+) -> DebugDiagnosis:
+    limits = limits or AgentLimits()
+    token = current_recorder.set(recorder)
+    diagnosis = None
+    recording_started = False
+    try:
+        if recorder is not None:
+            recorder.start(state, limits)
+            recording_started = True
+        diagnosis = await _run_agent(
+            state,
+            provider,
+            limits=limits,
+            transport=transport,
+            database=database,
+            tracer=tracer,
+        )
+        return diagnosis
+    finally:
+        try:
+            if recorder is not None and recording_started:
+                recorder.finish(state, diagnosis)
+        finally:
+            current_recorder.reset(token)
+
+
+async def _run_agent(
+    state: DebugSessionState,
+    provider: DecisionProvider,
+    *,
+    limits: AgentLimits | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+    database: Database | None = None,
+    tracer: Tracer | None = None,
 ) -> DebugDiagnosis:
     limits = limits or AgentLimits()
     tracer = tracer if tracer is not None else get_tracer(None)
     pending_call: ToolCallRecord | None = None
+    recorder = current_recorder.get()
 
     try:
         async with asyncio.timeout(limits.session_timeout_seconds) as session_timeout:
@@ -130,11 +169,20 @@ async def run_agent(
                     record_exception=False,
                     set_status_on_exception=False,
                 ) as decision_span:
+                    if recorder is not None:
+                        recorder.decision_started(state)
                     try:
                         decision = await provider.next_decision(
                             state.model_copy(deep=True)
                         )
                     except asyncio.CancelledError:
+                        if recorder is not None:
+                            recorder.error(
+                                "decision",
+                                "SESSION_TIMEOUT"
+                                if session_timeout.expired()
+                                else "CANCELLED",
+                            )
                         if session_timeout.expired():
                             _mark_decision_error(
                                 decision_span,
@@ -143,19 +191,25 @@ async def run_agent(
                             )
                         raise
                     except DecisionProviderError as error:
+                        if recorder is not None:
+                            recorder.error("decision", error.error_type)
                         _mark_decision_error(
                             decision_span, error.error_type, str(error)
                         )
-                        state.record_feedback(Observation(
-                            tool_name="decision_provider",
-                            success=False,
-                            error={"type": error.error_type, "message": str(error)},
-                        ))
+                        state.record_feedback(
+                            Observation(
+                                tool_name="decision_provider",
+                                success=False,
+                                error={"type": error.error_type, "message": str(error)},
+                            )
+                        )
                         state.mark_completed()
                         return DebugDiagnosis(
                             status="INCONCLUSIVE", missing_evidence=[str(error)]
                         )
                     except Exception as error:
+                        if recorder is not None:
+                            recorder.error("decision", type(error).__name__)
                         _mark_decision_error(
                             decision_span,
                             type(error).__name__,
@@ -163,6 +217,8 @@ async def run_agent(
                         )
                         raise
                     state.record_decision()
+                    if recorder is not None:
+                        recorder.decision_returned(decision)
 
                     if isinstance(decision, FinalAnswerDecision):
                         decision_span.set_attribute(
@@ -181,6 +237,8 @@ async def run_agent(
                     prepared = prepare_tool_call(decision)
                     if isinstance(prepared, ToolDispatchResult):
                         error = prepared.observation.error
+                        if recorder is not None:
+                            recorder.error("decision", str(error["type"]))
                         _mark_decision_error(
                             decision_span,
                             str(error["type"]),
@@ -192,6 +250,10 @@ async def run_agent(
                     _record_selected_tool(decision_span, prepared)
                     identity = canonical_call_identity(prepared)
                     if state.tool_call_count >= limits.max_tool_calls:
+                        if recorder is not None:
+                            recorder.error(
+                                "decision", LoopFeedbackType.TOOL_CALL_LIMIT_REACHED
+                            )
                         feedback = _feedback(
                             prepared.tool_name,
                             LoopFeedbackType.TOOL_CALL_LIMIT_REACHED,
@@ -204,10 +266,18 @@ async def run_agent(
                         )
                         state.record_feedback(feedback)
                         continue
-                    if sum(
-                        canonical_call_identity(call) == identity
-                        for call in state.tool_history
-                    ) >= limits.max_identical_tool_calls:
+                    if (
+                        sum(
+                            canonical_call_identity(call) == identity
+                            for call in state.tool_history
+                        )
+                        >= limits.max_identical_tool_calls
+                    ):
+                        if recorder is not None:
+                            recorder.error(
+                                "decision",
+                                LoopFeedbackType.IDENTICAL_TOOL_CALL_LIMIT_REACHED,
+                            )
                         feedback = _feedback(
                             prepared.tool_name,
                             LoopFeedbackType.IDENTICAL_TOOL_CALL_LIMIT_REACHED,
@@ -223,14 +293,27 @@ async def run_agent(
 
                 for attempt in range(2):
                     pending_call = prepared
-                    result = await dispatch_tool_call(
-                        prepared,
-                        transport=transport,
-                        database=database,
-                        tracer=tracer,
-                        session_id=state.session_id,
-                    )
+                    if recorder is not None:
+                        recorder.tool_started(prepared, retry=attempt > 0)
+                    try:
+                        result = await dispatch_tool_call(
+                            prepared,
+                            transport=transport,
+                            database=database,
+                            tracer=tracer,
+                            session_id=state.session_id,
+                        )
+                    except asyncio.CancelledError:
+                        if recorder is not None and not session_timeout.expired():
+                            recorder.error("tool", "CANCELLED")
+                        raise
+                    except Exception as error:
+                        if recorder is not None:
+                            recorder.error("tool", type(error).__name__)
+                        raise
                     pending_call = None
+                    if recorder is not None:
+                        recorder.tool_finished(result.observation)
                     if not result.accepted:
                         state.record_feedback(result.observation)
                         break
@@ -243,13 +326,24 @@ async def run_agent(
                         break
                     if state.tool_call_count >= limits.max_tool_calls:
                         break
-                    if sum(
-                        canonical_call_identity(call) == identity
-                        for call in state.tool_history
-                    ) >= limits.max_identical_tool_calls:
+                    if (
+                        sum(
+                            canonical_call_identity(call) == identity
+                            for call in state.tool_history
+                        )
+                        >= limits.max_identical_tool_calls
+                    ):
                         break
     except TimeoutError:
         if pending_call is not None:
+            if recorder is not None:
+                recorder.tool_finished(
+                    _feedback(
+                        pending_call.tool_name,
+                        LoopFeedbackType.SESSION_TIMEOUT,
+                        "Session timed out during tool execution",
+                    )
+                )
             state.record_tool_result(
                 pending_call,
                 _feedback(

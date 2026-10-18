@@ -2,6 +2,7 @@
 
 import json
 import os
+from time import monotonic
 from typing import Literal
 
 from openai import (
@@ -15,6 +16,7 @@ from pydantic import ValidationError
 
 from agent_service.agent.dispatch import TOOL_REGISTRY
 from agent_service.agent.loop import DecisionProviderError
+from agent_service.agent.recording import current_recorder
 from agent_service.agent.schemas import (
     AgentDecision,
     DebugDiagnosis,
@@ -148,6 +150,41 @@ class OpenAIDecisionProvider:
         self._pending_call_id: str | None = None
         self._observation_cursor = 0
 
+    async def _request(self, request: dict):
+        recorder = current_recorder.get()
+        if recorder is None:
+            return await self._client.responses.parse(**request)
+        call_id = recorder.model_started(self.model)
+        started_at = monotonic()
+        response = None
+        error_type = None
+        try:
+            response = await self._client.responses.parse(**request)
+            return response
+        except BaseException as error:
+            error_type = type(error).__name__
+            raise
+        finally:
+            usage = getattr(response, "usage", None)
+            values = None
+            if usage is not None:
+                values = {
+                    "input_tokens": getattr(usage, "input_tokens", None),
+                    "output_tokens": getattr(usage, "output_tokens", None),
+                    "total_tokens": getattr(usage, "total_tokens", None),
+                    "cached_input_tokens": getattr(
+                        getattr(usage, "input_tokens_details", None),
+                        "cached_tokens", None,
+                    ),
+                    "reasoning_output_tokens": getattr(
+                        getattr(usage, "output_tokens_details", None),
+                        "reasoning_tokens", None,
+                    ),
+                }
+            recorder.model_finished(
+                call_id, monotonic() - started_at, values, error_type
+            )
+
     async def next_decision(self, state: DebugSessionState) -> AgentDecision:
         if self._session_id is None:
             self._session_id = state.session_id
@@ -181,7 +218,7 @@ class OpenAIDecisionProvider:
                 }
                 if previous_id is not None:
                     request["previous_response_id"] = previous_id
-                response = await self._client.responses.parse(**request)
+                response = await self._request(request)
             except APIError as error:
                 raise DecisionProviderError(
                     "MODEL_API_ERROR", "OpenAI API request failed"

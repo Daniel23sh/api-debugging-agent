@@ -13,3 +13,4 @@ sandbox.db-shm
 sandbox.db-wal
 
 docs/
+evaluation/artifacts/
