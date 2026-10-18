@@ -114,7 +114,7 @@ async def run_agent(
     pending_call: ToolCallRecord | None = None
 
     try:
-        async with asyncio.timeout(limits.session_timeout_seconds):
+        async with asyncio.timeout(limits.session_timeout_seconds) as session_timeout:
             while state.step_count < limits.max_agent_decisions:
                 with tracer.start_as_current_span(
                     "agent_decision",
@@ -134,6 +134,14 @@ async def run_agent(
                         decision = await provider.next_decision(
                             state.model_copy(deep=True)
                         )
+                    except asyncio.CancelledError:
+                        if session_timeout.expired():
+                            _mark_decision_error(
+                                decision_span,
+                                LoopFeedbackType.SESSION_TIMEOUT,
+                                "Session timed out during decision selection",
+                            )
+                        raise
                     except DecisionProviderError as error:
                         _mark_decision_error(
                             decision_span, error.error_type, str(error)

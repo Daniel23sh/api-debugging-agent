@@ -46,6 +46,8 @@ def test_inspect_api_spec_contracts_validate_result_states() -> None:
     [
         (HttpMethod.POST, "/orders", "/orders"),
         (HttpMethod.GET, "/orders/{order_id}", "/orders/{order_id}"),
+        (HttpMethod.GET, "/products/{product_id}", "/products/{product_id}"),
+        (HttpMethod.PATCH, "/inventory/{product_id}", "/inventory/{product_id}"),
         (HttpMethod.GET, "/orders/1", "/orders/{order_id}"),
         (HttpMethod.PATCH, "/inventory/42", "/inventory/{product_id}"),
     ],
@@ -65,6 +67,9 @@ def test_approved_endpoints_are_normalized(
         (HttpMethod.GET, "/admin/debug"),
         (HttpMethod.GET, "/orders/1/extra"),
         (HttpMethod.GET, "/orders/1?include=payments"),
+        (HttpMethod.GET, "/products/.."),
+        (HttpMethod.GET, "/products/%2e%2e"),
+        (HttpMethod.GET, "/orders/%2f1"),
     ],
 )
 def test_unsupported_method_path_combinations_are_rejected(
