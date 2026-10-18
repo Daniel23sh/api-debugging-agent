@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -131,3 +134,52 @@ async def test_request_id_chains_execution_to_correlated_logs(
     assert inspection.data.events[-1].status_code == 500
     assert inspection.data.events[-1].error_type == "TypeError"
     assert "NoneType" in inspection.data.events[-1].error_message
+
+
+@pytest.mark.parametrize("configured", [True, False], ids=["configured", "default"])
+def test_standard_startup_shares_database_with_log_inspection(
+    tmp_path: Path,
+    configured: bool,
+) -> None:
+    env = os.environ.copy()
+    env.pop("SANDBOX_DATABASE_PATH", None)
+    if configured:
+        env["SANDBOX_DATABASE_PATH"] = str(tmp_path / "configured.db")
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    script = """
+from fastapi.testclient import TestClient
+
+from agent_service.tools.inspect_server_logs import (
+    InspectServerLogsArgs,
+    inspect_server_logs,
+)
+from sandbox_api.main import app
+
+with TestClient(app) as client:
+    response = client.post("/orders", json={"product_id": 4, "quantity": 1})
+assert response.status_code == 500
+request_id = response.headers["X-Request-ID"]
+result = inspect_server_logs(InspectServerLogsArgs(request_id=request_id))
+assert result.success, result
+assert str(result.data.request_id) == request_id
+assert [event.event_type for event in result.data.events] == [
+    "request_received", "request_failed",
+]
+assert result.data.events[-1].status_code == 500
+assert result.data.events[-1].error_type == "TypeError"
+assert "NoneType" in result.data.events[-1].error_message
+"""
+    subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    expected_path = tmp_path / ("configured.db" if configured else "sandbox.db")
+    assert expected_path.exists()
+    if configured:
+        assert not (tmp_path / "sandbox.db").exists()

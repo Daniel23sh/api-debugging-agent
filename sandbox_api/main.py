@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,7 +21,9 @@ from sandbox_api.models import (
 REQUEST_ID_HEADER = "X-Request-ID"
 
 
-def create_app(database_path: str | Path = "sandbox.db") -> FastAPI:
+def create_app(database_path: str | Path | None = None) -> FastAPI:
+    if database_path is None:
+        database_path = os.getenv("SANDBOX_DATABASE_PATH", "sandbox.db")
     database = Database(database_path)
 
     @asynccontextmanager

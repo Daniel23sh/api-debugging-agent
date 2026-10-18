@@ -280,3 +280,20 @@ def test_reset_restarts_generated_ids_deterministically(
 
     assert first_ids == second_ids == (1, 1)
     assert database.get_inventory(1).quantity == 10
+
+
+def test_explicit_database_path_overrides_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_path = tmp_path / "configured.db"
+    explicit_path = tmp_path / "explicit.db"
+    monkeypatch.setenv("SANDBOX_DATABASE_PATH", str(configured_path))
+
+    with TestClient(create_app(explicit_path)) as client:
+        response = client.get("/products/1")
+
+    assert response.status_code == 200
+    assert explicit_path.exists()
+    assert not configured_path.exists()
+    assert Database(explicit_path).get_request_logs(response.headers[REQUEST_ID_HEADER])
