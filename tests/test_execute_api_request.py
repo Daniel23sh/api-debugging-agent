@@ -94,6 +94,26 @@ async def test_request_without_body_sends_no_json_payload() -> None:
         ("GET", "/admin/debug"),
         ("GET", "/orders/{order_id}"),
         ("GET", "/orders/{other}"),
+        ("GET", "/products/.."),
+        ("GET", "/orders/.."),
+        ("GET", "/products/."),
+        ("GET", "/products/%2e%2e"),
+        ("GET", "/products/%2E."),
+        ("GET", "/products/.%2e"),
+        ("GET", "/products/%252e%252e"),
+        ("GET", "/products/%2f.."),
+        ("GET", "/products/%2F1"),
+        ("GET", "/orders/%252f1"),
+        ("GET", "/products/%5c.."),
+        ("GET", "/products/1\\.."),
+        ("GET", "/products/1?other=2"),
+        ("GET", "/products/1#other"),
+        ("GET", "/products/1\x00"),
+        ("GET", "/products/1\n"),
+        ("GET", "\t/products/1"),
+        ("GET", "/products/1\r\n"),
+        ("GET", "/products/1\x7f"),
+        ("GET", "/products/1\x85"),
     ],
 )
 async def test_non_executable_endpoints_are_rejected_before_http(
@@ -115,6 +135,54 @@ async def test_non_executable_endpoints_are_rejected_before_http(
     assert result.success is False
     assert result.error_type is ToolErrorType.ENDPOINT_NOT_ALLOWED
     assert requested is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/products/1"),
+        ("GET", "/products/not-an-integer"),
+        ("GET", "/products/1.5"),
+        ("GET", "/products/1 2"),
+        ("GET", "/orders/-1"),
+        ("PATCH", "/inventory/not-an-integer"),
+        ("POST", "/orders"),
+        ("POST", "/payments"),
+    ],
+)
+async def test_accepted_paths_match_the_actual_outgoing_destination(
+    method: str, path: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == path
+        return httpx.Response(422, json={"detail": "validation evidence"})
+
+    result = await execute_api_request(
+        ExecuteApiRequestArgs(method=method, path=path),
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert result.success is True
+    assert result.data is not None
+    assert result.data.path == path
+    assert result.data.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_malformed_path_parameter_reaches_sandbox_validation(tmp_path: Path) -> None:
+    database_path = tmp_path / "sandbox.db"
+    Database(database_path).initialize()
+
+    result = await execute_api_request(
+        ExecuteApiRequestArgs(method="GET", path="/products/not-an-integer"),
+        transport=httpx.ASGITransport(app=create_app(database_path)),
+    )
+
+    assert result.success is True
+    assert result.data is not None
+    assert result.data.status_code == 422
+    assert result.data.response_body["detail"][0]["loc"] == ["path", "product_id"]
 
 
 @pytest.mark.asyncio

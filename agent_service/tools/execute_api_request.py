@@ -28,7 +28,7 @@ class ExecuteApiRequestArgs(BaseModel):
     @field_validator("path", mode="before")
     @classmethod
     def strip_path(cls, value: object) -> object:
-        return value.strip() if isinstance(value, str) else value
+        return value.strip(" ") if isinstance(value, str) else value
 
 
 class ExecuteApiRequestData(BaseModel):
