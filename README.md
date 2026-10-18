@@ -9,8 +9,10 @@ APILens requires Python 3.11 or newer. Create and activate a virtual environment
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -c constraints-dev.txt -e ".[dev]"
 ```
+
+The pinned development resolution was verified with CPython 3.13.11 on macOS arm64.
 
 Copy `.env.example` to `.env` and set values as needed, including your OpenAI
 API key. Tracing exports to Phoenix over OTLP/HTTP when
