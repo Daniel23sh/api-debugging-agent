@@ -18,6 +18,7 @@ from evaluation.qualitative import (
     evaluate_response_quality,
     evaluate_root_cause,
 )
+from evaluation.trajectory import assess_success
 
 CASES = {
     case.case_id: case
@@ -225,6 +226,12 @@ async def test_supported_application_failure_can_be_grounded_but_poor():
     assert "PRIVATE_PROVIDER_BODY" not in request.model_dump_json()
     assert "internal failure message" in quality_judge.requests[0].rubric
     assert "observations" not in quality_judge.requests[0].data
+    root = await evaluate_root_cause(case, snapshot, Judge("CORRECT"))
+    assert root.state is ResultState.NOT_APPLICABLE
+    eligibility = assess_success(case, snapshot, [root, grounded, quality])
+    assert not eligibility.eligible and eligibility.reason == "FINAL_STATUS_MISMATCH"
+    assert snapshot.diagnosis.status == "INCONCLUSIVE"
+    assert case.expected_final_status == "NO_BUG_FOUND"
 
 
 def test_projection_excludes_credentials_headers_and_failure_messages():

@@ -127,6 +127,12 @@ disagreement (case_id, evaluator, category and resolution), your comment, and
 `no_material_unresolved_pattern: true` only after genuine human confirmation.
 Categories are `human_label`, `rubric`, `judge_error`, `isolated_disagreement`.
 Missing/error judge results must be re-evaluated before closing calibration.
+Resolutions must match the exact comparison selected by `--results`: a review
+with no resolutions from a later agreeing judgment cannot finalize an earlier
+judgment with disagreements. Preserve a copy of each review with its result file
+when switching versions. Finalization permits evidence-backed reviewed
+disagreements; it preserves both labels and does not require full agreement.
+Calibration completion does not make an incorrect agent final status successful.
 Example shape, with no fabricated human assessment:
 
 ```json

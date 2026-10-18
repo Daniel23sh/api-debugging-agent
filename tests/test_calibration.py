@@ -138,3 +138,91 @@ def test_fixed_calibration_subset_preserves_phase6():
     assert sum(case.case_kind == "bug" for case in cases) == 4
     assert sum(case.case_kind == "no_bug" for case in cases) == 1
     assert sum(case.case_kind == "inconclusive" for case in cases) == 1
+
+
+@pytest.fixture
+def reviewed_disagreements(tmp_path):
+    labels(tmp_path, disagreement=True)
+    judged = results()
+    judged[CALIBRATION_CASE_IDS[0]]["grounding"]["label"] = "UNGROUNDED"
+    judged[CALIBRATION_CASE_IDS[0]]["response_quality"]["label"] = "NEEDS_IMPROVEMENT"
+    comparison = compare_labels(tmp_path, judged)
+    review = HumanReview(
+        resolutions=[
+            {
+                "case_id": CALIBRATION_CASE_IDS[0],
+                "evaluator": evaluator,
+                "category": "rubric",
+                "resolution": rationale,
+            }
+            for evaluator, rationale in (
+                (
+                    "grounding",
+                    "Recorded application failure supports the claim, independently of task success.",
+                ),
+                (
+                    "response_quality",
+                    "An internal-failure-only answer gives no useful explanation or next step.",
+                ),
+            )
+        ],
+        no_material_unresolved_pattern=True,
+        comment="Human review confirmed no unresolved material pattern",
+    )
+    return comparison, review
+
+
+def test_finalization_retains_reviewed_disagreements(reviewed_disagreements):
+    comparison, review = reviewed_disagreements
+    before = json.dumps(comparison, sort_keys=True)
+    finalized = finalize_review(comparison, review)
+    assert finalized["calibration_complete"]
+    assert sum(item["agreement"] is False for item in finalized["comparisons"]) == 2
+    assert finalized["comparisons"] == comparison["comparisons"]
+    assert json.dumps(comparison, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("invalid", ["empty", "partial", "duplicate", "extraneous"])
+def test_every_disagreement_requires_exactly_one_resolution(
+    reviewed_disagreements, invalid
+):
+    comparison, review = reviewed_disagreements
+    records = review.resolutions
+    if invalid == "empty":
+        records = []
+    elif invalid == "partial":
+        records = records[:1]
+    elif invalid == "duplicate":
+        records = [*records, records[0]]
+    else:
+        records = [*records, records[0].model_copy(update={"evaluator": "root_cause"})]
+    invalid_review = review.model_copy(update={"resolutions": records})
+    with pytest.raises(ValueError, match="exactly one resolution"):
+        finalize_review(comparison, invalid_review)
+
+
+@pytest.mark.parametrize(
+    "missing", [{"no_material_unresolved_pattern": False}, {"comment": " "}]
+)
+def test_complete_dispositions_still_require_human_confirmation(
+    reviewed_disagreements, missing
+):
+    comparison, review = reviewed_disagreements
+    with pytest.raises(ValueError, match="human confirmation"):
+        finalize_review(comparison, review.model_copy(update=missing))
+
+
+@pytest.mark.parametrize("state", ["ERROR", "UNDETERMINED"])
+def test_resolving_an_unavailable_judgment_cannot_close_calibration(
+    reviewed_disagreements, state
+):
+    comparison, review = reviewed_disagreements
+    comparison = json.loads(json.dumps(comparison))
+    for item in comparison["comparisons"]:
+        if (
+            item["evaluator"] == "grounding"
+            and item["case_id"] == CALIBRATION_CASE_IDS[0]
+        ):
+            item.update(judge=state, agreement=None)
+    with pytest.raises(ValueError, match="evaluated again"):
+        finalize_review(comparison, review)
