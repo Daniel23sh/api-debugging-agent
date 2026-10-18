@@ -5,6 +5,9 @@ Phase 8A supplies offline-verifiable execution, persistence and reporting. Phase
 The frozen Phase 6 dataset and Phase 7 evaluators are reused without changing the
 agent, prompts, limits, fixtures or evaluator semantics.
 
+The approved live run is recorded in the [2026-10-18 V1 baseline report](reports/v1-baseline-2026-10-18.md),
+with machine-readable aggregates alongside it. Raw artifacts remain ignored.
+
 ## Offline verification
 
 From the editable project environment:
@@ -94,3 +97,71 @@ preflight all cases/configuration/output paths and Phoenix, then obtain explicit
 user approval for the selected models and usage estimate. No baseline is complete
 until actual outcomes, verified trace availability, aggregate report and separate
 independent result review are finished. Phase 9 is outside this workflow.
+
+## Live preflight and explicit paid execution
+
+Start a local Phoenix server separately; keep its database under ignored local
+artifacts. The server must support `GET /v1/projects/{project}/spans` with
+`trace_id` and `span_id` filters (verified with Phoenix 20.23.0). The minimal
+integration uses an unauthenticated local Phoenix origin and OTLP/HTTP; it does
+not create Phoenix experiment or dataset records.
+
+```bash
+python -m evaluation.baseline_live preflight \
+  evaluation/artifacts/baseline/v1-01 --judge-model gpt-6.1-sol \
+  --phoenix-url http://127.0.0.1:6006
+```
+
+Preflight loads the ignored `.env`, checks that an API key is present without
+sending it anywhere, and requires the normal OpenAI API origin. It verifies the
+18 fixed cases, fixtures, ordered setup and all 17 executable reproductions
+against isolated in-process Sandbox databases. It freezes the current V1 agent
+model/reasoning configuration and the explicitly selected judge model. It then
+exports a synthetic, content-free span through the existing production batch
+exporter and retrieves that exact root span from Phoenix. It makes **zero OpenAI
+calls**. A failed preflight must not be used for execution; choose a new directory
+rather than editing its immutable files.
+
+The manifest, `preflight.json` and `phoenix.json` belong to this experiment only.
+A unique Phoenix project `apilens-v1-<experiment-id>` separates the baseline from
+calibration and other experiments. Source/runtime checks also apply to live
+commands. The saved Git revision identifies the parent checkout; `source_sha256`
+identifies the exact Python/config contents, including reviewed uncommitted 8B
+implementation that cannot be committed before the real-result review gate.
+
+**Obtain explicit human approval for these models and the usage estimate first.**
+Only then run:
+
+```bash
+python -m evaluation.baseline_live run \
+  evaluation/artifacts/baseline/v1-01 --approve-paid
+```
+
+This flag is a deliberate operator acknowledgment, not authorization by itself.
+The command rechecks the saved Phoenix probe before constructing an OpenAI
+client. It uses the frozen agent/judge models with existing V1 behavior, SDK
+retries disabled, app-owned tracing and the existing telemetry privacy boundary.
+After collection and evaluation it flushes/shuts down instrumentation, saves the
+report, and verifies every recorded DebugSession root in Phoenix. Judge SDK calls
+are outside the agent recorder and its system metrics. Paid usage/output length
+is model-dependent; no monetary cap is implied by preflight or this flag.
+
+Repeating this command resumes unfinished work, skipping every started agent
+case and already started/completed judgment. Do not use a new directory to repeat
+completed paid cases to improve outcomes. Additional paid execution or a new paid
+evaluation revision requires separate human approval.
+
+The following commands are read-only with respect to OpenAI and can be repeated:
+
+```bash
+python -m evaluation.baseline summary evaluation/artifacts/baseline/v1-01
+python -m evaluation.baseline_live verify-traces evaluation/artifacts/baseline/v1-01
+```
+
+Each trace check is append-only under `trace-checks/`. A `VERIFIED` result means
+Phoenix returned the exact trace/span ID, expected root name and absent parent.
+The saved URL is the actual Phoenix REST span-query link, suitable for inspecting
+failed investigations; the Phoenix UI can also search the same trace ID in the
+recorded project. `NO_TRACE` and `NOT_FOUND` stay explicit. An HTTP export success
+or a UI HTTP-200 page alone is not accepted as trace availability. Never commit
+these private server responses, snapshots, bundles, or local Phoenix storage.
