@@ -1044,3 +1044,74 @@ async def test_interrupted_tool_execution_is_marked_as_session_timeout(
     assert tool.parent.span_id == session.get_span_context().span_id
     assert tool.status.status_code is StatusCode.ERROR
     assert tool.attributes[ERROR_TYPE] == "SESSION_TIMEOUT"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("external_cancel", [False, True])
+async def test_decision_deadline_tracing_distinguishes_external_cancellation(
+    monkeypatch, external_cancel: bool,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    assert tracer_provider is not None
+    tracer = get_tracer(tracer_provider)
+    waiting = asyncio.Event()
+    private_marker = "PRIVATE_PROVIDER_CANCELLATION_DO_NOT_TRACE"
+
+    class WaitingProvider:
+        async def next_decision(self, snapshot: DebugSessionState):
+            if not snapshot.observations:
+                return ToolCallDecision(
+                    kind="tool_call",
+                    tool_name="inspect_endpoint_implementation",
+                    arguments={"method": "GET", "path": "/products/1"},
+                )
+            waiting.set()
+            await asyncio.Event().wait()
+
+    state = DebugSessionState(session_id="decision-timeout", issue=private_marker)
+    try:
+        with tracer.start_as_current_span("DebugSession") as session:
+            task = asyncio.create_task(run_agent(
+                state,
+                WaitingProvider(),
+                limits=AgentLimits(session_timeout_seconds=45 if external_cancel else 1),
+                tracer=tracer,
+            ))
+            await waiting.wait()
+            if external_cancel:
+                task.cancel(private_marker)
+                with pytest.raises(asyncio.CancelledError, match=private_marker):
+                    await task
+                assert state.status == "RUNNING"
+            else:
+                diagnosis = await task
+                assert diagnosis.status == "LIMIT_REACHED"
+                assert diagnosis.missing_evidence == ["Session timeout reached"]
+                assert len(diagnosis.evidence) == 1
+                assert diagnosis.evidence[0].source == "endpoint_implementation"
+                assert state.status == "COMPLETED"
+        assert state.step_count == state.tool_call_count == 1
+        assert len(state.observations) == 1 and state.observations[0].success
+    finally:
+        shutdown_tracing(tracer_provider)
+
+    spans = exporter.get_finished_spans()
+    decisions = [span for span in spans if span.name == "agent_decision"]
+    assert len(decisions) == 2
+    assert all(
+        span.parent.span_id == session.get_span_context().span_id for span in decisions
+    )
+    interrupted = decisions[-1]
+    if external_cancel:
+        assert interrupted.status.status_code is StatusCode.UNSET
+        assert ERROR_TYPE not in interrupted.attributes
+    else:
+        assert interrupted.status.status_code is StatusCode.ERROR
+        assert interrupted.attributes[ERROR_TYPE] == "SESSION_TIMEOUT"
+        assert interrupted.status.description == "Session timed out during decision selection"
+    assert private_marker not in repr([
+        (span.attributes, span.status.description, [event.attributes for event in span.events])
+        for span in spans
+    ])
