@@ -16,6 +16,7 @@ from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
 from opentelemetry.trace import Span, Status, StatusCode, Tracer
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
+from agent_service.agent.recording import current_recorder
 from agent_service.agent.schemas import (
     JsonObject,
     Observation,
@@ -239,6 +240,9 @@ async def dispatch_tool_call(
         record_exception=False,
         set_status_on_exception=False,
     ) as tool_span:
+        recorder = current_recorder.get()
+        if recorder is not None:
+            recorder.tool_span()
         try:
             tool_result = await registration.executor(args, transport, database)
         except asyncio.CancelledError:

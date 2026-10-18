@@ -20,6 +20,7 @@ from agent_service.agent import (
     OpenAIDecisionProvider,
     run_agent,
 )
+from agent_service.agent.recording import SessionRecorder
 from agent_service.agent.schemas import NonEmptyStr
 from agent_service.observability import (
     TracerProvider,
@@ -48,6 +49,7 @@ async def run_debug_session(
     transport: httpx.AsyncBaseTransport | None = None,
     database: Database | None = None,
     tracer: Tracer | None = None,
+    recorder: SessionRecorder | None = None,
 ) -> DebugDiagnosis:
     state = DebugSessionState(session_id=str(uuid4()), issue=issue)
     tracer = tracer if tracer is not None else get_tracer(None)
@@ -71,6 +73,7 @@ async def run_debug_session(
                 transport=transport,
                 database=database,
                 tracer=tracer,
+                recorder=recorder,
             )
         except Exception as error:
             session_span.set_attribute(ERROR_TYPE, type(error).__name__[:256])
