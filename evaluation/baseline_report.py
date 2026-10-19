@@ -32,10 +32,8 @@ def _measurement(values: list[int | float | None]) -> dict:
     }
 
 
-def build_summary(directory: Path, *, revision: str = "initial") -> dict:
-    manifest = load_manifest(directory)
-    records = []
-    runs, results_by_session = [], {}
+def aggregate_records(records: list[dict]) -> dict:
+    """Arithmetic over saved rows only; never evaluate or fill missing run data."""
     evaluator_totals = {
         name.value: {
             "expected_units": 0,
@@ -46,17 +44,71 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
         }
         for name in EvaluatorName
     }
-    measurements = {
-        key: []
-        for key in (
-            "latency_seconds",
-            "model_calls",
-            "tool_calls",
-            "input_tokens",
-            "output_tokens",
-            "total_tokens",
-        )
+    for record in records:
+        for name, totals in evaluator_totals.items():
+            unit = record["evaluators"][name]
+            totals["expected_units"] += unit["expected_units"] or 0
+            totals["missing_units"] += unit["missing_units"] or 0
+            totals["unknown_unit_cases"] += unit["expected_units"] is None
+            for state, count in unit["states"].items():
+                totals["states"][state] += count
+            for label, count in unit["labels"].items():
+                totals["labels"][label] = totals["labels"].get(label, 0) + count
+    measurements = {}
+    for key in (
+        "latency_seconds",
+        "model_calls",
+        "tool_calls",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+    ):
+        values = []
+        for record in records:
+            metrics = record["system_metrics"]
+            if key.endswith("tokens"):
+                metrics = metrics["token_usage"] if metrics else None
+            values.append(metrics.get(key) if metrics else None)
+        measurements[key] = _measurement(values)
+    return {
+        "total_cases": len(records),
+        "execution_states": dict(
+            Counter(record["execution_state"] for record in records)
+        ),
+        "evaluation_states": dict(
+            Counter(record["evaluation_state"] for record in records)
+        ),
+        "final_statuses": dict(
+            Counter(record["actual_final_status"] or "MISSING" for record in records)
+        ),
+        "expected_status": {
+            "denominator": len(records),
+            "matches": sum(
+                record["expected_status_match"] is True for record in records
+            ),
+            "mismatches": sum(
+                record["expected_status_match"] is False for record in records
+            ),
+            "missing": sum(
+                record["expected_status_match"] is None for record in records
+            ),
+        },
+        "successful_runs": sum(
+            bool(
+                record["success_eligibility"]
+                and record["success_eligibility"]["eligible"]
+            )
+            for record in records
+        ),
+        "evaluators": evaluator_totals,
+        "measurements": measurements,
     }
+
+
+def build_summary(directory: Path, *, revision: str = "initial") -> dict:
+    manifest = load_manifest(directory)
+    records = []
+    runs, results_by_session = [], {}
     versions: dict[str, set[str]] = {name.value: set() for name in EvaluatorName}
     for case in cases():
         location = case_directory(directory, case.case_id)
@@ -157,22 +209,12 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
                 if decision_unit
                 else 1
             )
-            totals = evaluator_totals[name.value]
-            totals["expected_units"] += expected_units or 0
-            totals["missing_units"] += (
-                expected_units - len(unit_results) if expected_units is not None else 0
-            )
-            totals["unknown_unit_cases"] += expected_units is None
             states = Counter(result.state.value for result in unit_results)
             labels = Counter(
                 result.label.value
                 for result in unit_results
                 if result.label is not None
             )
-            for state, count in states.items():
-                totals["states"][state] += count
-            for label, count in labels.items():
-                totals["labels"][label] = totals["labels"].get(label, 0) + count
             versions[name.value].update(result.version for result in unit_results)
             record["evaluators"][name.value] = {
                 "expected_units": expected_units,
@@ -187,15 +229,6 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
                     if result.value is not None
                 ],
             }
-        for key, measurements_for_key in measurements.items():
-            value = getattr(metrics, key, None) if metrics else None
-            if key.endswith("tokens"):
-                value = (
-                    getattr(metrics.token_usage, key, None)
-                    if metrics and metrics.token_usage
-                    else None
-                )
-            measurements_for_key.append(value)
         if run and execution_state == "RETURNED":
             runs.append(run)
             results_by_session[run.session_id] = actual_results
@@ -212,41 +245,9 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
         "kind": "apilens-v1-baseline-summary",
         "experiment": manifest.model_dump(mode="json"),
         "evaluation_revision": revision,
-        "total_cases": len(records),
-        "execution_states": dict(
-            Counter(record["execution_state"] for record in records)
-        ),
-        "evaluation_states": dict(
-            Counter(record["evaluation_state"] for record in records)
-        ),
-        "final_statuses": dict(
-            Counter(record["actual_final_status"] or "MISSING" for record in records)
-        ),
-        "expected_status": {
-            "denominator": len(records),
-            "matches": sum(
-                record["expected_status_match"] is True for record in records
-            ),
-            "mismatches": sum(
-                record["expected_status_match"] is False for record in records
-            ),
-            "missing": sum(
-                record["expected_status_match"] is None for record in records
-            ),
-        },
-        "successful_runs": sum(
-            bool(
-                record["success_eligibility"]
-                and record["success_eligibility"]["eligible"]
-            )
-            for record in records
-        ),
+        **aggregate_records(records),
         "evaluator_versions_observed": {
             name: sorted(value) for name, value in versions.items()
-        },
-        "evaluators": evaluator_totals,
-        "measurements": {
-            name: _measurement(value) for name, value in measurements.items()
         },
         "cases": records,
         "limitations": [

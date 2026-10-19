@@ -103,8 +103,11 @@ python -m evaluation.baseline archive evaluation/artifacts/baseline/v1-01 \
 
 Replace `REPORT_UUID` with the directory name under that experiment's `reports/`.
 The archive command prints the saved JSON unchanged and writes nothing. It needs
-no OpenAI credentials and performs no judging or current metric, eligibility or
-convergence calculation. Original source/runtime and evaluator versions remain
+no OpenAI credentials and performs no judging, run-metric extraction, eligibility
+or convergence reassessment. Aggregate counts, denominators and measurements are
+checked arithmetically against the saved case rows, preserving missing values;
+only floating-point statistics allow a small rounding tolerance. No later data
+or current evaluator decisions enter these checks. Original source/runtime and evaluator versions remain
 attached to the results. A saved report retains its original missing/pending data
 even if collection or evaluation later appends more results. Manifest, dataset,
 snapshot, model, judge and recorded

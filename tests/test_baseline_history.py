@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+from math import inf, nextafter
 
 import pytest
 
@@ -150,6 +151,103 @@ def test_archived_report_rejects_path_traversal(archived_experiment):
     directory, _, _ = archived_experiment
     with pytest.raises(baseline.BaselineError, match="INVALID_REPORT_ID"):
         baseline.load_archived_report(directory, "../manifest.json")
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("successful_runs",), 18),
+        (("expected_status", "denominator"), 17),
+        (("expected_status", "matches"), 18),
+        (("expected_status", "mismatches"), 0),
+        (("expected_status", "missing"), 1),
+        (("execution_states",), {"RETURNED": 17}),
+        (("evaluation_states",), {"COMPLETE": 17}),
+        (("final_statuses",), {"RESOLVED": 18}),
+        (("measurements", "latency_seconds", "sum_observed"), 1_000_000),
+        (("measurements", "tool_calls", "total_all_cases"), 0),
+        (("measurements", "model_calls", "observed_cases"), 18),
+        (("measurements", "input_tokens", "sum_observed"), 0),
+        (("measurements", "input_tokens", "missing_cases"), 0),
+        (("evaluators", "grounding", "labels"), {"GROUNDED": 18}),
+        (("evaluators", "grounding", "states", "SCORED"), 17),
+        (("evaluators", "tool_selection", "expected_units"), 0),
+        (("evaluators", "tool_selection", "missing_units"), 1),
+        (("evaluators", "tool_selection", "unknown_unit_cases"), 1),
+    ],
+)
+def test_archived_report_rejects_aggregate_case_contradictions(
+    archived_experiment, path, value
+):
+    directory, report, _ = archived_experiment
+    filename = report / "summary.json"
+    summary = json.loads(filename.read_text())
+    target = summary
+    for key in path[:-1]:
+        target = target[key]
+    assert target[path[-1]] != value
+    target[path[-1]] = value
+    filename.write_text(json.dumps(summary))
+    with pytest.raises(baseline.BaselineError, match="ARCHIVED_REPORT_MISMATCH"):
+        baseline.load_archived_report(directory, report.name)
+
+
+def test_archived_measurements_allow_only_float_roundoff(
+    archived_experiment, monkeypatch
+):
+    directory, report, recorded = archived_experiment
+    filename = report / "summary.json"
+    for statistic in ("sum_observed", "mean_observed", "total_all_cases"):
+        value = recorded["measurements"]["latency_seconds"][statistic]
+        recorded["measurements"]["latency_seconds"][statistic] = nextafter(value, inf)
+    filename.write_text(json.dumps(recorded))
+    before = filename.read_bytes()
+
+    def no_reassessment(*args, **kwargs):
+        pytest.fail("archive consistency must use saved case data only")
+
+    monkeypatch.setattr(baseline_report, "collect_system_metrics", no_reassessment)
+    monkeypatch.setattr(baseline_report, "assess_success", no_reassessment)
+    monkeypatch.setattr(baseline_report, "convergence", no_reassessment)
+    monkeypatch.setattr(baseline, "evaluate_run", no_reassessment)
+    assert baseline.load_archived_report(directory, report.name) == recorded
+    assert filename.read_bytes() == before
+
+
+def test_record_rollups_preserve_zero_and_partial_usage(archived_experiment):
+    _, _, recorded = archived_experiment
+    rows = recorded["cases"][:3]
+    rows[0]["system_metrics"] = {
+        "latency_seconds": 0.0,
+        "model_calls": 0,
+        "tool_calls": 0,
+        "token_usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+    }
+    rows[1]["system_metrics"] = {
+        "latency_seconds": 0.2,
+        "model_calls": 1,
+        "tool_calls": 2,
+        "token_usage": {"input_tokens": 3, "output_tokens": None, "total_tokens": None},
+    }
+    rows[2]["system_metrics"] = None
+    rollups = baseline_report.aggregate_records(rows)
+    assert rollups["total_cases"] == 3
+    assert rollups["execution_states"] == {"RETURNED": 3}
+    assert rollups["measurements"]["latency_seconds"] == {
+        "observed_cases": 2,
+        "missing_cases": 1,
+        "sum_observed": 0.2,
+        "mean_observed": 0.1,
+        "total_all_cases": None,
+    }
+    assert rollups["measurements"]["input_tokens"]["mean_observed"] == 1.5
+    assert rollups["measurements"]["output_tokens"] == {
+        "observed_cases": 1,
+        "missing_cases": 2,
+        "sum_observed": 0,
+        "mean_observed": 0.0,
+        "total_all_cases": None,
+    }
 
 
 @pytest.mark.parametrize("later_tamper", [None, "run", "metadata", "judge"])

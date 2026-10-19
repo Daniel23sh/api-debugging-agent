@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from importlib.metadata import version
+from math import isclose, isfinite
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Literal
@@ -609,6 +610,34 @@ def load_archived_report(directory: Path, report_id: str) -> dict:
         name: sorted(value) for name, value in versions.items()
     }:
         raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+    from evaluation.baseline_report import aggregate_records
+
+    # Validate saved arithmetic, not current eligibility or evaluator semantics.
+    for field, expected in aggregate_records(summary["cases"]).items():
+        saved = summary.get(field)
+        if field != "measurements":
+            if saved != expected:
+                raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+            continue
+        if not isinstance(saved, dict) or saved.keys() != expected.keys():
+            raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+        for name, statistics in expected.items():
+            recorded = saved[name]
+            if not isinstance(recorded, dict) or recorded.keys() != statistics.keys():
+                raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+            for statistic, value in statistics.items():
+                actual = recorded[statistic]
+                # Float summation can differ slightly across historical runtimes.
+                if isinstance(value, float):
+                    matches = (
+                        type(actual) in (int, float)
+                        and isfinite(actual)
+                        and isclose(actual, value, rel_tol=1e-12, abs_tol=1e-12)
+                    )
+                else:
+                    matches = actual == value
+                if not matches:
+                    raise BaselineError("ARCHIVED_REPORT_MISMATCH")
     return summary
 
 
