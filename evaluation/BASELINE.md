@@ -66,6 +66,11 @@ diagnosis prose, source/log contents, tool arguments or judge explanations.
 Full private snapshots and evaluation bundles remain separate. Never commit raw
 artifacts. Public aggregate reporting must be intentionally reviewed in Phase 8B.
 
+Only executions with a committed `RETURNED` outcome contribute to experiment
+success and convergence. A diagnosis snapshot published before an interruption
+still exposes its status, evidence, measurements and evaluator labels, but its
+report eligibility is `EXECUTION_NOT_RETURNED` and its convergence is absent.
+
 ## Interruptions, resume and re-evaluation
 
 Reusing the same directory/config skips all started agent cases and completed or
@@ -84,6 +89,29 @@ Evaluation failures and interrupted judgments are retained when resuming. A
 deliberate re-evaluation uses a new explicit revision and preserves earlier
 results. This does not execute the agent again. Any additional paid judging or
 agent execution still needs explicit approval.
+
+### Historical read-only access
+
+`summary` recomputes measurements and writes a new report, so it retains the exact
+source/runtime checks used by collection, resumption and evaluation. After a
+legitimate source or environment change, read an existing saved report instead:
+
+```bash
+python -m evaluation.baseline archive evaluation/artifacts/baseline/v1-01 \
+  --report-id REPORT_UUID
+```
+
+Replace `REPORT_UUID` with the directory name under that experiment's `reports/`.
+The archive command prints the saved JSON unchanged and writes nothing. It needs
+no OpenAI credentials and performs no judging or current metric, eligibility or
+convergence calculation. Original source/runtime and evaluator versions remain
+attached to the results. A saved report retains its original missing/pending data
+even if collection or evaluation later appends more results. Manifest, dataset,
+snapshot, model, judge and recorded
+result bindings are still checked; archival access does not authorize execution
+or waive source/runtime checks on any existing mutation operation. It supports
+the existing serialized schema, without migrations or reinterpretation of older
+evaluator labels. Use the historical checkout if that schema is no longer supported.
 
 Library injection supports offline integration tests; live orchestration must
 freeze and explicitly construct the configured agent and judge providers. No
@@ -165,3 +193,11 @@ failed investigations; the Phoenix UI can also search the same trace ID in the
 recorded project. `NO_TRACE` and `NOT_FOUND` stay explicit. An HTTP export success
 or a UI HTTP-200 page alone is not accepted as trace availability. Never commit
 these private server responses, snapshots, bundles, or local Phoenix storage.
+
+`run` and `verify-traces` exit unsuccessfully if any required case is `NO_TRACE`
+or `NOT_FOUND`, after preserving the append-only trace check. This conservatively
+leaves tracing incomplete even for an early setup failure that produced no trace;
+the execution failure and all available results remain recorded. Network/server
+query errors also exit with a safe error. Resolve ingestion and use `verify-traces`
+to check again without agent or judge calls. Never recollect or rejudge completed
+cases to repair missing telemetry. Historical archive reads require no Phoenix server.

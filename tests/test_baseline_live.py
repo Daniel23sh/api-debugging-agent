@@ -1,4 +1,5 @@
 import json
+import sys
 
 import httpx
 import pytest
@@ -157,7 +158,9 @@ async def test_trace_verifier_rejects_wrong_identity_and_preserves_missing(
 ):
     directory = tmp_path / "live"
     await live.preflight(directory, CONFIG, url="http://phoenix")
-    path = await live.verify_traces(directory)
+    with pytest.raises(BaselineError, match="PHOENIX_TRACE_VERIFICATION_INCOMPLETE"):
+        await live.verify_traces(directory)
+    path = next((directory / "trace-checks").glob("*.json"))
     assert {row["state"] for row in json.loads(path.read_text())["cases"]} == {
         "NO_TRACE"
     }
@@ -178,12 +181,14 @@ async def test_trace_verifier_rejects_wrong_identity_and_preserves_missing(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("missing_trace", [None, "NOT_FOUND", "PARTIAL", "NO_TRACE"])
 async def test_live_orchestration_frozen_providers_resume_and_verified_links(
-    tmp_path, phoenix, monkeypatch
+    tmp_path, phoenix, monkeypatch, missing_trace
 ):
     directory = tmp_path / "live"
     await live.preflight(directory, CONFIG, url="http://phoenix")
     constructed = []
+    judgments = []
 
     class SDK:
         async def __aenter__(self):
@@ -203,6 +208,10 @@ async def test_live_orchestration_frozen_providers_resume_and_verified_links(
         async def __aexit__(self, *args):
             pass
 
+        async def judge(self, request, response_type):
+            judgments.append(request)
+            return await super().judge(request, response_type)
+
     def provider(**kwargs):
         constructed.append(kwargs)
         assert kwargs["model"] == CONFIG.agent_model
@@ -212,7 +221,41 @@ async def test_live_orchestration_frozen_providers_resume_and_verified_links(
     monkeypatch.setattr(live, "AsyncOpenAI", lambda **_: SDK())
     monkeypatch.setattr(live, "OpenAIDecisionProvider", provider)
     monkeypatch.setattr(live, "OpenAIJudgeProvider", Judge)
-    await live.run_live(directory, approve_paid=True)
+    original_span = live.phoenix_span
+    checked_sessions = []
+
+    async def check_span(client, settings, **kwargs):
+        if kwargs["name"] == "DebugSession":
+            checked_sessions.append(kwargs["trace_id"])
+            if missing_trace == "NOT_FOUND" or (
+                missing_trace == "PARTIAL" and kwargs["trace_id"] == checked_sessions[0]
+            ):
+                return {
+                    "state": "NOT_FOUND",
+                    "trace_id": kwargs["trace_id"],
+                    "url": None,
+                }
+        return await original_span(client, settings, **kwargs)
+
+    def trace_summary(directory):
+        summary = build_summary(directory)
+        if missing_trace == "NO_TRACE":
+            summary["cases"][0]["trace_id"] = None
+        return summary
+
+    monkeypatch.setattr(live, "phoenix_span", check_span)
+    monkeypatch.setattr(live, "build_summary", trace_summary)
+
+    async def run():
+        if missing_trace:
+            with pytest.raises(
+                BaselineError, match="PHOENIX_TRACE_VERIFICATION_INCOMPLETE"
+            ):
+                await live.run_live(directory, approve_paid=True)
+        else:
+            await live.run_live(directory, approve_paid=True)
+
+    await run()
     assert len(constructed) == 18
     summary = build_summary(directory)
     assert summary["total_cases"] == 18
@@ -220,13 +263,81 @@ async def test_live_orchestration_frozen_providers_resume_and_verified_links(
     paths = sorted((directory / "trace-checks").glob("*.json"))
     checked = json.loads(paths[0].read_text())
     assert len(checked["cases"]) == 18
-    assert {row["state"] for row in checked["cases"]} == {"VERIFIED"}
-    assert all("trace_id=" in row["url"] for row in checked["cases"])
+    expected_states = (
+        {"VERIFIED", "NO_TRACE"}
+        if missing_trace == "NO_TRACE"
+        else {"VERIFIED", "NOT_FOUND"}
+        if missing_trace == "PARTIAL"
+        else {missing_trace or "VERIFIED"}
+    )
+    assert {row["state"] for row in checked["cases"]} == expected_states
+    if missing_trace == "PARTIAL":
+        assert all(row["trace_id"] for row in summary["cases"])
+        assert sum(row["state"] == "VERIFIED" for row in checked["cases"]) == 17
+    assert all(
+        "trace_id=" in row["url"]
+        for row in checked["cases"]
+        if row["state"] == "VERIFIED"
+    )
     assert "PRIVATE_" not in paths[0].read_text()
-    await live.run_live(directory, approve_paid=True)
+    retained = {
+        path: path.read_bytes()
+        for root in ("cases", "evaluations")
+        for path in (directory / root).rglob("*.json")
+    }
+    assert retained and judgments
+    judgment_count = len(judgments)
+    await run()
     assert len(constructed) == 18
+    assert len(judgments) == judgment_count
+    assert all(path.read_bytes() == content for path, content in retained.items())
     assert len(list((directory / "trace-checks").glob("*.json"))) == 2
     assert len(list((directory / "reports").iterdir())) == 2
+
+
+@pytest.mark.parametrize("failure", ["network", "server"])
+def test_trace_query_failure_cli_is_safe(tmp_path, monkeypatch, capsys, failure):
+    directory = tmp_path / "live"
+    monkeypatch.setattr(live, "BASELINES", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["baseline_live", "verify-traces", str(directory)])
+    monkeypatch.setattr(
+        live,
+        "live_settings",
+        lambda _: {"url": "http://phoenix", "project_name": "test"},
+    )
+    monkeypatch.setattr(
+        live,
+        "build_summary",
+        lambda _: {
+            "cases": [
+                {"case_id": "case", "trace_id": "trace", "session_span_id": "span"}
+            ]
+        },
+    )
+    original_client = httpx.AsyncClient
+
+    def respond(request):
+        if failure == "network":
+            raise httpx.ConnectError("PRIVATE_NETWORK_ERROR", request=request)
+        return httpx.Response(503, text="PRIVATE_PHOENIX_RESPONSE")
+
+    monkeypatch.setattr(
+        live.httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(
+            **kwargs, transport=httpx.MockTransport(respond)
+        ),
+    )
+    with pytest.raises(SystemExit) as error:
+        live.main()
+    assert error.value.code == 1
+    output = capsys.readouterr()
+    assert not output.out
+    assert "Baseline operation failed:" in output.err
+    assert "PRIVATE_" not in output.err
+    assert (
+        "ConnectError" if failure == "network" else "PHOENIX_QUERY_FAILED"
+    ) in output.err
 
 
 @pytest.mark.asyncio

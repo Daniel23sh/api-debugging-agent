@@ -251,6 +251,8 @@ async def verify_traces(directory: Path) -> Path:
             "cases": records,
         },
     )
+    if any(record["state"] != "VERIFIED" for record in records):
+        raise BaselineError("PHOENIX_TRACE_VERIFICATION_INCOMPLETE")
     return destination
 
 

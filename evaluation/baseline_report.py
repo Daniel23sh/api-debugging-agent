@@ -18,7 +18,7 @@ from evaluation.baseline import (
 )
 from evaluation.contracts import EvaluatorName, ResultState
 from evaluation.metrics import collect_system_metrics
-from evaluation.trajectory import assess_success, convergence
+from evaluation.trajectory import SuccessEligibility, assess_success, convergence
 
 
 def _measurement(values: list[int | float | None]) -> dict:
@@ -104,6 +104,10 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
         ):
             evaluation_state = "EVALUATOR_ERRORS"
         eligibility = assess_success(case, run, actual_results) if run else None
+        if eligibility and execution_state != "RETURNED":
+            eligibility = SuccessEligibility(
+                eligible=False, reason="EXECUTION_NOT_RETURNED"
+            )
         record = {
             "case_id": case.case_id,
             "case_kind": case.case_kind.value,
@@ -192,7 +196,7 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
                     else None
                 )
             measurements_for_key.append(value)
-        if run:
+        if run and execution_state == "RETURNED":
             runs.append(run)
             results_by_session[run.session_id] = actual_results
         records.append(record)

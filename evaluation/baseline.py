@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import subprocess
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from importlib.metadata import version
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from opentelemetry.trace import Tracer
@@ -27,7 +28,12 @@ from agent_service.agent.schemas import (
 )
 from agent_service.agent.state import AgentLimits
 from agent_service.main import ProviderFactory, run_debug_session
-from evaluation.contracts import ComparisonContext, Contract, EvaluationRun
+from evaluation.contracts import (
+    ComparisonContext,
+    Contract,
+    EvaluationRun,
+    EvaluatorName,
+)
 from evaluation.dataset import EvaluationCase, load_evaluation_cases
 from evaluation.judges import JudgeProvider
 from evaluation.metrics import collect_system_metrics
@@ -180,7 +186,7 @@ def initialize(
     return manifest
 
 
-def load_manifest(directory: Path) -> BaselineManifest:
+def _read_manifest(directory: Path) -> BaselineManifest:
     manifest = BaselineManifest.model_validate_json(
         (directory / "manifest.json").read_text()
     )
@@ -188,10 +194,15 @@ def load_manifest(directory: Path) -> BaselineManifest:
         case.case_id for case in cases()
     ]:
         raise BaselineError("DATASET_MISMATCH")
-    if manifest.source_sha256 != source_digest():
-        raise BaselineError("SOURCE_MISMATCH")
+    return manifest
+
+
+def load_manifest(directory: Path) -> BaselineManifest:
+    manifest = _read_manifest(directory)
     if manifest.config.limits != AgentLimits():
         raise BaselineError("LIMITS_MISMATCH")
+    if manifest.source_sha256 != source_digest():
+        raise BaselineError("SOURCE_MISMATCH")
     if manifest.runtime_versions != runtime_versions():
         raise BaselineError("RUNTIME_MISMATCH")
     return manifest
@@ -223,7 +234,12 @@ def evaluation_metadata(manifest: BaselineManifest) -> dict:
 
 
 def load_snapshot(directory: Path, case_id: str) -> EvaluationRun | None:
-    manifest = load_manifest(directory)
+    return _read_snapshot(directory, case_id, load_manifest(directory))
+
+
+def _read_snapshot(
+    directory: Path, case_id: str, manifest: BaselineManifest
+) -> EvaluationRun | None:
     location = case_directory(directory, case_id)
     path = location / "run.json"
     started_path, outcome = location / "started.json", location / "execution.json"
@@ -466,6 +482,19 @@ async def evaluate_saved(
 def load_bundle(
     directory: Path, case_id: str, *, revision: str
 ) -> EvaluationBundle | None:
+    return _read_bundle(
+        directory, case_id, revision, load_manifest(directory), check_metrics=True
+    )
+
+
+def _read_bundle(
+    directory: Path,
+    case_id: str,
+    revision: str,
+    manifest: BaselineManifest,
+    *,
+    check_metrics: bool,
+) -> EvaluationBundle | None:
     target = evaluation_directory(directory, revision) / case_id
     path = target / "result.json"
     if not any(
@@ -473,11 +502,10 @@ def load_bundle(
         for name in ("result.json", "started.json", "error.json")
     ):
         return None
-    manifest = load_manifest(directory)
     metadata = json.loads((target.parent / "metadata.json").read_text())
     if metadata != evaluation_metadata(manifest):
         raise BaselineError("EVALUATION_METADATA_MISMATCH")
-    run = load_snapshot(directory, case_id)
+    run = _read_snapshot(directory, case_id, manifest)
     started = json.loads((target / "started.json").read_text())
     if (
         run is None
@@ -495,7 +523,7 @@ def load_bundle(
         or bundle.trace_id != run.trace_id
     ):
         raise BaselineError("EVALUATION_RUN_MISMATCH")
-    if bundle.system_metrics != collect_system_metrics(run) or any(
+    if (check_metrics and bundle.system_metrics != collect_system_metrics(run)) or any(
         result.case_id != run.case_id
         or result.session_id != run.session_id
         or result.trace_id != run.trace_id
@@ -507,6 +535,81 @@ def load_bundle(
     ):
         raise BaselineError("EVALUATION_CONFIGURATION_MISMATCH")
     return bundle
+
+
+def load_archived_report(directory: Path, report_id: str) -> dict:
+    """Read saved measurements under the current serialized schema, without evaluation."""
+    try:
+        UUID(report_id)
+    except ValueError:
+        raise BaselineError("INVALID_REPORT_ID") from None
+    manifest = _read_manifest(directory)
+    summary = json.loads(
+        (directory / "reports" / report_id / "summary.json").read_text()
+    )
+    if (
+        summary.get("kind") != "apilens-v1-baseline-summary"
+        or summary.get("experiment") != manifest.model_dump(mode="json")
+        or summary.get("total_cases") != len(manifest.case_ids)
+        or [record["case_id"] for record in summary["cases"]] != manifest.case_ids
+    ):
+        raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+    revision = summary["evaluation_revision"]
+    evaluation_directory(directory, revision)
+    versions: dict[str, set[str]] = {name.value: set() for name in EvaluatorName}
+    for record in summary["cases"]:
+        case_id = record["case_id"]
+        run = _read_snapshot(directory, case_id, manifest)
+        bundle = _read_bundle(
+            directory, case_id, revision, manifest, check_metrics=False
+        )
+        if record["session_id"] is not None and (
+            run is None
+            or record["session_id"] != run.session_id
+            or record["trace_id"] != run.trace_id
+            or record["session_span_id"] != run.session_span_id
+        ):
+            raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+        # Later append-only work does not fill measurements absent in this report.
+        if record["evaluation_state"] not in {"COMPLETE", "EVALUATOR_ERRORS"}:
+            if any(
+                record["evaluators"][name.value][key] != empty
+                for name in EvaluatorName
+                for key, empty in (("states", {}), ("labels", {}), ("values", []))
+            ):
+                raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+            continue
+        if bundle is None:
+            raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+        metrics = bundle.system_metrics.model_dump(mode="json", exclude={"errors"})
+        if record["system_metrics"] != metrics:
+            raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+        for name in EvaluatorName:
+            results = [result for result in bundle.results if result.evaluator is name]
+            recorded = record["evaluators"][name.value]
+            expected = {
+                "states": dict(Counter(result.state.value for result in results)),
+                "labels": dict(
+                    Counter(
+                        result.label.value
+                        for result in results
+                        if result.label is not None
+                    )
+                ),
+                "values": [
+                    {key: value for key, value in result.value.items() if key != "path"}
+                    for result in results
+                    if result.value is not None
+                ],
+            }
+            if any(recorded[key] != value for key, value in expected.items()):
+                raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+            versions[name.value].update(result.version for result in results)
+    if summary["evaluator_versions_observed"] != {
+        name: sorted(value) for name, value in versions.items()
+    }:
+        raise BaselineError("ARCHIVED_REPORT_MISMATCH")
+    return summary
 
 
 class OfflineProvider:
@@ -555,14 +658,22 @@ def main() -> None:
     from evaluation.baseline_report import save_report
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("smoke", "summary"))
+    parser.add_argument("action", choices=("smoke", "summary", "archive"))
     parser.add_argument("directory", type=Path)
     parser.add_argument("--revision", default="initial")
+    parser.add_argument(
+        "--report-id", help="saved report UUID for read-only archive access"
+    )
     args = parser.parse_args()
     directory = args.directory.resolve()
     if not directory.is_relative_to(BASELINES) or directory == BASELINES:
         parser.error("use a dedicated directory under evaluation/artifacts/baseline/")
+    if args.action == "archive" and args.report_id is None:
+        parser.error("archive requires --report-id")
     try:
+        if args.action == "archive":
+            print(json.dumps(load_archived_report(directory, args.report_id), indent=2))
+            return
         if args.action == "smoke":
             if not directory.exists():
                 initialize(
