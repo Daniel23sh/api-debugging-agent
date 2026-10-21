@@ -7,6 +7,7 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 from urllib.parse import quote, urlencode, urlsplit
 from uuid import uuid4
 
@@ -29,13 +30,16 @@ from evaluation.baseline import (
     _fixture,
     cases,
     collect_runs,
+    digest,
     evaluate_saved,
     initialize,
     load_manifest,
+    new_manifest,
     utc_now,
     write_private,
 )
 from evaluation.baseline_report import build_summary, save_report
+from evaluation.compare import reference_check, validate_reference
 from evaluation.judges import OpenAIJudgeProvider
 from sandbox_api.db import Database
 from sandbox_api.main import create_app
@@ -155,19 +159,55 @@ def check_openai_environment() -> None:
         raise BaselineError("UNAPPROVED_OPENAI_BASE_URL")
 
 
-async def preflight(directory: Path, config: BaselineConfig, *, url: str) -> None:
+async def preflight(
+    directory: Path,
+    config: BaselineConfig,
+    *,
+    url: str,
+    variant: Literal["v1", "v2"] = "v1",
+    v1_directory: Path | None = None,
+    v1_report_id: str | None = None,
+    v1_source_ref: str | None = None,
+) -> None:
     url = phoenix_url(url)
     check_openai_environment()
+    binding = None
+    if variant == "v2":
+        if v1_directory is None or v1_report_id is None or v1_source_ref is None:
+            raise BaselineError("V1_REFERENCE_REQUIRED")
+        candidate = new_manifest(config, mode="live", variant="v2")
+        comparison = reference_check(
+            v1_directory, v1_report_id, v1_source_ref, candidate.model_dump(mode="json")
+        )
+        if not comparison["comparable"]:
+            raise BaselineError("COMPARISON_RUNTIME_MISMATCH")
+        binding = {
+            "v1_experiment_id": comparison["experiment_ids"]["v1"],
+            "v1_directory": str(v1_directory.resolve()),
+            "v1_report_id": v1_report_id,
+            "v1_report_sha256": digest(
+                v1_directory / "reports" / v1_report_id / "summary.json"
+            ),
+            "v1_source_ref": v1_source_ref,
+        }
     requests = await check_requests()
     async with httpx.AsyncClient(timeout=10) as client:
         health = await client.get(f"{url}/healthz")
         if health.status_code != 200 or health.text.strip() != "OK":
             raise BaselineError("PHOENIX_UNAVAILABLE")
-        manifest = initialize(directory, config, mode="live")
+        manifest = initialize(directory, config, mode="live", variant=variant)
+        if binding is not None:
+            write_private(
+                directory / "comparison.json",
+                {
+                    **binding,
+                    "v2_experiment_id": manifest.experiment_id,
+                },
+            )
         settings = {
             "experiment_id": manifest.experiment_id,
             "url": url,
-            "project_name": f"apilens-v1-{manifest.experiment_id}",
+            "project_name": f"apilens-{manifest.variant}-{manifest.experiment_id}",
             "service_name": os.getenv("OTEL_SERVICE_NAME", "apilens-agent-service"),
         }
         with phoenix_environment(settings):
@@ -203,6 +243,11 @@ async def preflight(directory: Path, config: BaselineConfig, *, url: str) -> Non
                 "requests": requests,
                 "phoenix_probe": {**verified, "span_id": span_id},
                 "paid_calls_made": 0,
+                **(
+                    {"comparison_sha256": digest(directory / "comparison.json")}
+                    if binding
+                    else {}
+                ),
             },
         )
 
@@ -216,12 +261,15 @@ def live_settings(directory: Path) -> dict:
         or settings["experiment_id"] != manifest.experiment_id
         or check["experiment_id"] != manifest.experiment_id
         or check["source_sha256"] != manifest.source_sha256
-        or settings["project_name"] != f"apilens-v1-{manifest.experiment_id}"
+        or settings["project_name"]
+        != f"apilens-{manifest.variant}-{manifest.experiment_id}"
         or len(check["requests"]) != 18
         or check["phoenix_probe"]["state"] != "VERIFIED"
     ):
         raise BaselineError("LIVE_PREFLIGHT_MISMATCH")
     phoenix_url(settings["url"])
+    if manifest.variant == "v2":
+        validate_reference(directory, manifest.model_dump(mode="json"))
     return settings
 
 
@@ -309,6 +357,10 @@ def main() -> None:
     parser.add_argument("--judge-model")
     parser.add_argument("--phoenix-url", default="http://127.0.0.1:6006")
     parser.add_argument("--approve-paid", action="store_true")
+    parser.add_argument("--variant", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--v1-directory", type=Path)
+    parser.add_argument("--v1-report-id")
+    parser.add_argument("--v1-source-ref")
     args = parser.parse_args()
     directory = args.directory.resolve()
     if not directory.is_relative_to(BASELINES) or directory == BASELINES:
@@ -322,7 +374,17 @@ def main() -> None:
                 reasoning_effort=os.getenv("OPENAI_REASONING_EFFORT", "medium"),
                 judge_model=args.judge_model,
             )
-            asyncio.run(preflight(directory, config, url=args.phoenix_url))
+            asyncio.run(
+                preflight(
+                    directory,
+                    config,
+                    url=args.phoenix_url,
+                    variant=args.variant,
+                    v1_directory=args.v1_directory,
+                    v1_report_id=args.v1_report_id,
+                    v1_source_ref=args.v1_source_ref,
+                )
+            )
         elif args.action == "run":
             asyncio.run(run_live(directory, approve_paid=args.approve_paid))
         else:

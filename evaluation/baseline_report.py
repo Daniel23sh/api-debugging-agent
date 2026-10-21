@@ -242,7 +242,7 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
     for record in records:
         record["convergence"] = ratios_by_session.get(record["session_id"])
     return {
-        "kind": "apilens-v1-baseline-summary",
+        "kind": f"{manifest.kind}-summary",
         "experiment": manifest.model_dump(mode="json"),
         "evaluation_revision": revision,
         **aggregate_records(records),
@@ -264,9 +264,17 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
 def render_report(summary: dict) -> str:
     manifest = summary["experiment"]
     title = (
-        "V1 baseline"
+        (
+            "V1 baseline"
+            if manifest["kind"] == "apilens-v1-baseline"
+            else "V2 experiment"
+        )
         if manifest["mode"] == "live"
-        else "OFFLINE SMOKE — not V1 performance results"
+        else (
+            "OFFLINE SMOKE — not V1 performance results"
+            if manifest["kind"] == "apilens-v1-baseline"
+            else "OFFLINE SMOKE — not V2 performance results"
+        )
     )
     lines = [
         f"# {title}",
