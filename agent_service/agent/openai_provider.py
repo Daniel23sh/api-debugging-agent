@@ -28,8 +28,17 @@ from agent_service.agent.state import DebugSessionState
 SYSTEM_INSTRUCTIONS = """Investigate before concluding. Use a tool only when it adds useful evidence.
 Base each diagnosis on observed evidence. Continue when evidence is insufficient and
 a useful action remains; stop when enough evidence exists. Return INCONCLUSIVE
-instead of inventing details. Avoid unnecessary repeated calls. Do not modify code
-or system state. LIMIT_REACHED is application-controlled; never select it."""
+instead of inventing details; do not claim RESOLVED without supporting evidence.
+When a material causal claim depends on unobserved runtime state, consider controlled
+Sandbox reproduction using the reported operation and relevant input. After an
+observed server failure, inspect request-correlated logs if they can clarify its
+cause. Product existence, source-code hypotheses, and unrelated endpoint responses
+do not establish a particular runtime state. Static evidence may establish a cause
+without HTTP execution; no tool or fixed tool order is always required.
+Avoid unnecessary repeated calls. Approved Sandbox HTTP operations, including
+POST/PATCH, may modify Sandbox data when appropriate for investigation. Never modify
+source code or act on external or production systems. Stay within application-enforced
+permissions and limits. LIMIT_REACHED is application-controlled; never select it."""
 CORRECTION = "The previous output could not be accepted. Return exactly one valid tool call or one structured final diagnosis under the same contracts."
 MAX_FUNCTION_OUTPUT_CHARS = 20_000
 

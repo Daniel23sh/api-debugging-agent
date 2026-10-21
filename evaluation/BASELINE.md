@@ -204,3 +204,126 @@ the execution failure and all available results remain recorded. Network/server
 query errors also exit with a safe error. Resolve ingestion and use `verify-traces`
 to check again without agent or judge calls. Never recollect or rejudge completed
 cases to repair missing telemetry. Historical archive reads require no Phoenix server.
+
+## Phase 10 — controlled V2 preparation and later execution
+
+Phase 10A changes only `SYSTEM_INSTRUCTIONS` in the agent: seek approved Sandbox
+runtime evidence when a causal claim depends on unobserved state. Approved
+POST/PATCH requests may change isolated Sandbox data; source-code changes and
+external/production actions remain prohibited. Static diagnosis remains valid
+when its evidence is sufficient. Provider parsing/correction, model/settings,
+tools/permissions, limits, fixture/setup, dataset, evaluators and metric definitions
+are unchanged. Model-quality effects remain unmeasured until a separately approved
+Phase 10B experiment. See the [selected hypothesis](reports/v1-error-analysis.md#9-one-v2-target-and-testable-hypothesis).
+
+The existing runner accepts `--variant v2` at creation; default V1 commands retain
+their behavior. V2 uses manifest kind `apilens-v2-experiment`, summary kind
+`apilens-v2-experiment-summary`, a new experiment UUID, a fresh dedicated directory,
+and Phoenix project `apilens-v2-<experiment-id>`. Existing directories are refused.
+All fixture isolation, append-only snapshots/results, source/runtime checks,
+typed failures, paid gate, resume behavior, tracing and privacy controls are shared.
+The variant property adds no field to historical V1 manifests. Archival reads
+still validate saved bindings and arithmetic without rerunning evaluator semantics.
+
+V2 live preflight additionally requires the original V1 directory, saved report
+UUID and a Git source ref. The ref must reconstruct the **entire** recorded V1
+source/config checksum; the recorded parent alone is insufficient. Commit
+`a41786621ff79e16624f5cbdf51878ee47a31d3e` matches the exact frozen source checksum
+`5e4f455833b30a8ad4e6e8bcd51d3ed23ffb25368d4d14190f249f2d8c859dc5`.
+Keep that Git history available locally; no checkout or network fetch is performed
+by comparison. Both full source identities remain attached to the experiments.
+
+`evaluation.compare` checks matching dataset hash/order, fixture, mode, models,
+reasoning, limits, initial evaluation revision and observed evaluator versions.
+It compares all agent/Sandbox sources and the core recorder, evaluator and metric
+sources, plus effective dataset loading, fixture/setup execution, evaluator
+orchestration and their bindings. The provider AST
+(Python's parsed code structure) is compared with only `SYSTEM_INSTRUCTIONS`
+replaced by a placeholder; changes to parsing, tool descriptions or safety code
+therefore fail that check. Reporting imports, arithmetic, case rows and eligibility
+are separately pinned to the approved AST fingerprints: original collection and
+the Phase 8 repairs for V1; only the repaired implementation for V2. Rendering and
+experiment-kind metadata are excluded. These explicit pins allow the known
+reporting refactor without claiming general semantic equivalence of arbitrary
+code. Changes to reporting semantics require a separately reviewed decision.
+The existing Phase 8 interruption-reporting correction is retained: V1's 18
+returned executions and original judgments are preserved, while a V2 interruption
+cannot become a strict success. No historical eligibility is recomputed.
+
+The private V2 `comparison.json` pins the original saved-report checksum and
+reference location/identity; its checksum is frozen in `preflight.json`. The paid
+runner revalidates that binding and current comparability before constructing a
+client. Final live comparison also checks that the selected V1 report is exactly
+the preflight-bound report, even if another report has identical measurements.
+Changing source/config/runtime or borrowing another experiment's preflight/project
+is refused. Retain original private artifacts in place. Runtime/dependency
+differences are reported by comparison as a confound with no outcome comparisons;
+V2 live preflight refuses them. Resolve drift before seeking paid approval.
+Only package versions recorded by V1 can be directly compared; unchanged dependency
+pin files provide additional evidence, not a complete historical installation
+inventory for every transitive package.
+
+### Phase 10B inputs and commands (not authorization)
+
+Use the existing ignored `.env` for credentials, with the normal OpenAI API origin.
+Keep `OPENAI_MODEL=gpt-6-sol`, `OPENAI_REASONING_EFFORT=medium`, and explicit judge
+`gpt-6.1-sol`; use the frozen runtime/dependencies. Start the retained local Phoenix
+service separately, preserving its storage. Choose an unused V2 output directory.
+After the final source has stopped changing, this preflight makes no OpenAI calls:
+
+```bash
+python -m evaluation.baseline_live preflight \
+  evaluation/artifacts/baseline/v2-01 --variant v2 \
+  --judge-model gpt-6.1-sol --phoenix-url http://127.0.0.1:6006 \
+  --v1-directory evaluation/artifacts/baseline/v1-2026-10-18-01 \
+  --v1-report-id 3afd2466-3ba3-4901-b7bd-08ec7818967f \
+  --v1-source-ref a41786621ff79e16624f5cbdf51878ee47a31d3e
+```
+
+Review the saved identity, settings, comparison binding and usage estimate, then
+obtain explicit human approval for the full run. Preflight is not approval. Only
+after that separate approval, Phase 10B may execute:
+
+```bash
+python -m evaluation.baseline_live run evaluation/artifacts/baseline/v2-01 --approve-paid
+```
+
+The same command resumes without repeating any started agent case or judgment.
+Do not repair an interrupted case by choosing a fresh directory, running selected
+paid pretests, or rejudging V1. Trace verification remains required and uses the
+dedicated V2 project. Final source changes after preflight require a new preflight
+before any paid work; do not change sources mid-experiment.
+
+After the actual V2 results exist, obtain its saved report UUID under `reports/`
+and compare **saved initial results** without running agents or judges:
+
+```bash
+python -m evaluation.compare \
+  evaluation/artifacts/baseline/v1-2026-10-18-01 evaluation/artifacts/baseline/v2-01 \
+  --v1-report-id 3afd2466-3ba3-4901-b7bd-08ec7818967f \
+  --v2-report-id V2_REPORT_UUID \
+  --v1-source-ref a41786621ff79e16624f5cbdf51878ee47a31d3e
+```
+
+By default V2 source verification uses the current working sources. After later
+source changes, supply `--v2-source-ref COMMIT_WITH_EXACT_V2_SOURCE`; its checksum
+must match the V2 manifest. Git parent identity alone is not sufficient when the
+run included uncommitted source. Never bypass source validation to force a match.
+
+Comparison prints deterministic sanitized JSON: saved aggregates and case rows,
+existing strict-success changes/failure reasons, status pairs, all six evaluator
+families, trajectory/convergence, calls/latency/tokens, and structured errors with
+coverage. It preserves scored/not-applicable/undetermined/error states, missing
+units, and unknown numeric values. Missing/interrupted/evaluator-error outcomes
+are `UNDETERMINED`, and unknown deltas stay null rather than becoming zeros or
+regressions. Convergence stays within each experiment; no pooled ratio or new
+quality score is introduced. Judge explanations, diagnosis text, source/log bodies
+and tool arguments are excluded. Intentionally review output before publishing;
+Phase 10A creates no public V2 results report or predicted measurements.
+
+Offline plumbing remains available with
+`python -m evaluation.baseline smoke evaluation/artifacts/baseline/v2-smoke-01 --variant v2`.
+It is prominently labeled as offline and is not model-quality evidence. Focused
+tests also exercise mock V2 live orchestration, paid refusal, resume, original
+archive reads, cohort/source drift, missing data and privacy without real OpenAI
+requests.

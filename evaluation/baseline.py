@@ -46,6 +46,7 @@ from sandbox_api.main import create_app
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "evaluation" / "datasets" / "v1_cases.json"
 BASELINES = ROOT / "evaluation" / "artifacts" / "baseline"
+EXPERIMENT_KINDS = {"v1": "apilens-v1-baseline", "v2": "apilens-v2-experiment"}
 
 
 class BaselineError(Exception):
@@ -97,7 +98,7 @@ class BaselineConfig(Contract):
 
 
 class BaselineManifest(Contract):
-    kind: Literal["apilens-v1-baseline"] = "apilens-v1-baseline"
+    kind: Literal["apilens-v1-baseline", "apilens-v2-experiment"] = "apilens-v1-baseline"
     format_version: Literal[1] = 1
     experiment_id: str
     mode: Literal["offline", "live"]
@@ -109,6 +110,10 @@ class BaselineManifest(Contract):
     source_sha256: str
     git_commit: str
     runtime_versions: dict[str, str]
+
+    @property
+    def variant(self) -> str:
+        return "v1" if self.kind == EXPERIMENT_KINDS["v1"] else "v2"
 
 
 class CaseExecution(Contract):
@@ -158,8 +163,11 @@ def experiment_lock(directory: Path) -> Iterator[None]:
         lock.unlink()
 
 
-def initialize(
-    directory: Path, config: BaselineConfig, *, mode: Literal["offline", "live"]
+def new_manifest(
+    config: BaselineConfig,
+    *,
+    mode: Literal["offline", "live"],
+    variant: Literal["v1", "v2"] = "v1",
 ) -> BaselineManifest:
     dataset = cases()
     if config.limits != AgentLimits():
@@ -171,7 +179,8 @@ def initialize(
         text=True,
         check=True,
     ).stdout.strip()
-    manifest = BaselineManifest(
+    return BaselineManifest(
+        kind=EXPERIMENT_KINDS[variant],
         experiment_id=str(uuid4()),
         mode=mode,
         created_at=utc_now(),
@@ -182,6 +191,16 @@ def initialize(
         git_commit=commit,
         runtime_versions=runtime_versions(),
     )
+
+
+def initialize(
+    directory: Path,
+    config: BaselineConfig,
+    *,
+    mode: Literal["offline", "live"],
+    variant: Literal["v1", "v2"] = "v1",
+) -> BaselineManifest:
+    manifest = new_manifest(config, mode=mode, variant=variant)
     directory.mkdir(parents=True, exist_ok=False, mode=0o700)
     write_private(directory / "manifest.json", manifest.model_dump(mode="json"))
     return manifest
@@ -549,7 +568,7 @@ def load_archived_report(directory: Path, report_id: str) -> dict:
         (directory / "reports" / report_id / "summary.json").read_text()
     )
     if (
-        summary.get("kind") != "apilens-v1-baseline-summary"
+        summary.get("kind") != f"{manifest.kind}-summary"
         or summary.get("experiment") != manifest.model_dump(mode="json")
         or summary.get("total_cases") != len(manifest.case_ids)
         or [record["case_id"] for record in summary["cases"]] != manifest.case_ids
@@ -690,6 +709,7 @@ def main() -> None:
     parser.add_argument("action", choices=("smoke", "summary", "archive"))
     parser.add_argument("directory", type=Path)
     parser.add_argument("--revision", default="initial")
+    parser.add_argument("--variant", choices=EXPERIMENT_KINDS, default="v1")
     parser.add_argument(
         "--report-id", help="saved report UUID for read-only archive access"
     )
@@ -713,9 +733,12 @@ def main() -> None:
                         judge_model="offline-judge",
                     ),
                     mode="offline",
+                    variant=args.variant,
                 )
             if load_manifest(directory).mode != "offline":
                 raise BaselineError("CANNOT_SMOKE_TEST_A_LIVE_BASELINE")
+            if load_manifest(directory).variant != args.variant:
+                raise BaselineError("EXPERIMENT_VARIANT_MISMATCH")
             asyncio.run(collect_runs(directory, OfflineProvider))
             asyncio.run(
                 evaluate_saved(directory, OfflineJudge(), revision=args.revision)
