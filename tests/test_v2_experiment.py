@@ -541,6 +541,10 @@ def test_reporting_pins_ignore_ast_display_and_empty_optional_fields(
         ast, "dump", lambda *a, **k: pytest.fail("version-dependent display")
     )
     assert compare.reporting_fingerprint(content) == compare.CURRENT_REPORTING
+    assert (
+        compare.reader_fingerprint(sources[1]["evaluation/baseline.py"])
+        == compare.CURRENT_READERS
+    )
 
 
 @pytest.mark.asyncio
@@ -625,4 +629,49 @@ async def test_source_gate_rejects_changed_effective_inputs_and_reporting(
         lambda ref=None: sources[0] if ref == "test-v1" else changed,
     )
     with pytest.raises(BaselineError, match=error):
+        compare.check_cohort(left, right, v1_source_ref="test-v1")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        (b'raise BaselineError("DATASET_MISMATCH")', b"pass"),
+        (b'raise BaselineError("SOURCE_MISMATCH")', b"pass"),
+        (
+            b"    return run\n",
+            b'    return run.model_copy(update={"model_calls": []})\n',
+        ),
+        (
+            b"    return bundle\n",
+            b'    return bundle.model_copy(update={"results": []})\n',
+        ),
+    ],
+)
+async def test_source_gate_rejects_reader_changes_even_with_matching_source_identity(
+    reference, sources, monkeypatch, before, after
+):
+    left = archived(reference)
+    changed = dict(sources[1])
+    assert before in changed["evaluation/baseline.py"]
+    changed["evaluation/baseline.py"] = changed["evaluation/baseline.py"].replace(
+        before, after, 1
+    )
+    # These alterations passed the narrower function/binding comparison.
+    assert (
+        compare.controlled_definitions(changed)[0]
+        == compare.controlled_definitions(sources[1])[0]
+    )
+    right = copy.deepcopy(left)
+    right["experiment"].update(
+        kind="apilens-v2-experiment",
+        experiment_id="v2",
+        source_sha256=compare.source_checksum(changed),
+    )
+    monkeypatch.setattr(
+        compare,
+        "source_files",
+        lambda ref=None: sources[0] if ref == "test-v1" else changed,
+    )
+    with pytest.raises(BaselineError, match="READER_DEFINITIONS_MISMATCH"):
         compare.check_cohort(left, right, v1_source_ref="test-v1")

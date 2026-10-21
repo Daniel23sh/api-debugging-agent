@@ -246,6 +246,16 @@ the Phase 8 repairs for V1; only the repaired implementation for V2. Rendering a
 experiment-kind metadata are excluded. These explicit pins allow the known
 reporting refactor without claiming general semantic equivalence of arbitrary
 code. Changes to reporting semantics require a separately reviewed decision.
+Reader helpers, their data contracts, imports, source/runtime/digest helpers and
+path/variant constants are also pinned. Original collection, approved Phase 8
+archive repairs and V2 identity support are accepted for V1 source verification;
+only the reviewed V2 reader implementation is accepted for V2. This closes a gap
+where a changed `_read_snapshot` or `_read_bundle` could alter evaluation inputs
+while matching a newly recorded source hash. It also protects `_read_manifest`,
+`load_manifest` and archive validation without forcing historical code to contain
+later archive helpers. Pins use the same canonical AST representation as reporting.
+This is an explicit compatibility list, not a proof of equivalence for arbitrary
+future infrastructure changes; changing a protected definition requires review.
 The existing Phase 8 interruption-reporting correction is retained: V1's 18
 returned executions and original judgments are preserved, while a V2 interruption
 cannot become a strict success. No historical eligibility is recomputed.
