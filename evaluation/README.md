@@ -1,5 +1,8 @@
 # Phase 7 evaluation
 
+The full-dataset Phase 8 workflow is documented in [BASELINE.md](BASELINE.md).
+Calibration remains limited to its six approved cases.
+
 `EvaluationCase` remains the Phase 6 expected behavior. `EvaluationRun` is an
 opt-in snapshot of actual agent activity. `EvaluatorResult` judges one decision
 or the entire run. The public `/debug` request and decision-provider interface
