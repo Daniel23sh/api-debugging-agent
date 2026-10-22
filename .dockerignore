@@ -1,0 +1,12 @@
+# Only runtime sources and installation metadata enter the build context.
+**
+!Dockerfile
+!pyproject.toml
+!constraints-dev.txt
+!README.md
+!agent_service/
+!agent_service/**
+!sandbox_api/
+!sandbox_api/**
+**/__pycache__/
+**/*.py[cod]

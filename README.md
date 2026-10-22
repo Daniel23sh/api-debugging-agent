@@ -2,6 +2,8 @@
 
 APILens is a focused API Debugging Agent that will investigate bugs in a controlled REST API using bounded tools and evidence-backed diagnosis.
 
+For the three-service Docker Compose stack, see [Docker local runtime](DOCKER.md).
+
 ## Local setup
 
 APILens requires Python 3.11 or newer. Create and activate a virtual environment, then install the project with development dependencies:

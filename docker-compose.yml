@@ -1,0 +1,66 @@
+services:
+  agent-service:
+    build: .
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-sol}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-medium}
+      SANDBOX_BASE_URL: http://sandbox-api:8000
+      SANDBOX_DATABASE_PATH: /data/sandbox.db
+      PHOENIX_COLLECTOR_ENDPOINT: ${DOCKER_PHOENIX_COLLECTOR_ENDPOINT-http://phoenix:6006}
+      PHOENIX_PROJECT_NAME: ${PHOENIX_PROJECT_NAME:-apilens}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-apilens-agent-service}
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - sandbox-data:/data:ro
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+      phoenix:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/openapi.json', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  sandbox-api:
+    build: .
+    command: ["uvicorn", "sandbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      SANDBOX_DATABASE_PATH: /data/sandbox.db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - sandbox-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  phoenix:
+    image: arizephoenix/phoenix:20.23.0@sha256:c542e7de1dc1fdd0f938de337d44ebefa7266e91391eed6e7978523d7f6e1f2f
+    user: "65532:65532"
+    environment:
+      PHOENIX_WORKING_DIR: /home/nonroot/.phoenix
+      PHOENIX_TELEMETRY_ENABLED: "false"
+      PHOENIX_ALLOW_EXTERNAL_RESOURCES: "false"
+    ports:
+      - "127.0.0.1:6006:6006"
+    volumes:
+      # Preserve ownership from the image's existing nonroot home directory.
+      - phoenix-data:/home/nonroot
+    healthcheck:
+      test: ["CMD", "/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:6006/readyz', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  sandbox-data:
+  phoenix-data:
