@@ -93,6 +93,13 @@ workflow are documented in [evaluation/README.md](evaluation/README.md).
 Live judging requires an explicit `EVAL_JUDGE_MODEL`; ordinary tests are offline.
 
 ```bash
-pytest
 ruff check .
+python -m mypy
+PYTHON_DOTENV_DISABLED=1 OPENAI_API_KEY= EVAL_JUDGE_MODEL= PHOENIX_COLLECTOR_ENDPOINT= python -m pytest
 ```
+
+GitHub Actions runs these checks on Ubuntu/Python 3.13 for pull requests targeting
+`main` and pushes to `main`, after the constrained development install above.
+The full pytest run includes the Golden regression subset once. No repository
+secrets or running services are required. See the
+[CI scope and offline verification notes](evaluation/README.md#offline-verification).

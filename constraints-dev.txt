@@ -4,6 +4,7 @@ annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 arize-phoenix-otel==0.17.1
+ast-serialize==0.13.1
 certifi==2026.7.22
 charset-normalizer==3.5.1
 click==8.5.0
@@ -18,6 +19,9 @@ httpx2==2.13.1
 idna==3.20
 iniconfig==2.3.0
 jiter==0.17.0
+librt==0.16.0
+mypy==2.4.0
+mypy_extensions==1.1.0
 openai==3.19.0
 openinference-instrumentation==0.1.66
 openinference-instrumentation-openai==0.1.61
@@ -32,6 +36,7 @@ opentelemetry-proto==1.44.0
 opentelemetry-sdk==1.44.0
 opentelemetry-semantic-conventions==0.65b0
 packaging==26.3
+pathspec==1.1.1
 pluggy==1.6.0
 protobuf==7.36.2
 pydantic==2.13.5
