@@ -199,8 +199,58 @@ production behavior changes are needed.
 
 These checks protect deterministic system contracts. They do not measure live
 LLM quality or run baseline, rejudging or comparison experiments. Live evaluation
-remains an explicit human-approved activity; Phase 11C will address the gates and
-runbook.
+remains an explicit human-approved activity; see the
+[live evaluation runbook](BASELINE.md#phase-11c--live-evaluation-runbook).
+
+### Merge gates and repository configuration (Phase 11C)
+
+Before merging, require all of the following on the current PR revision:
+
+| Command | Required protection |
+|---|---|
+| `ruff check .` | Lint checks |
+| `python -m mypy` | The strict production scope above |
+| `python -m pytest` | All unit, integration, contract, safety and Golden tests |
+
+The full suite includes deterministic security boundaries such as rejected tool
+arguments, approved endpoint restrictions and agent execution limits, plus real
+Sandbox HTTP/SQLite integration. It is not a comprehensive security audit. The
+Golden subset is included automatically; its separate command is useful locally,
+not a second CI gate. Do not accept skipped, cancelled, pending or failed checks
+as completion, and review changes to the workflow, type scope and test selection.
+
+The workflow is named `CI`. Its only job is `checks` (no separate job `name`),
+so the check-run name/status context is **`checks`**, normally displayed under
+`CI / checks`. Lint, typing and tests are steps within this one check, not three
+independent required-check names. A nonzero exit fails the job and prevents later
+steps from running. No path filters, conditional skips or `continue-on-error`
+are configured. Renaming this job requires updating the repository requirement.
+
+A failing Actions job alone does **not** prevent merging. A repository
+administrator must configure `main` in Settings → Rules → Rulesets (or the
+equivalent branch-protection rule):
+
+1. Target `main` (the default branch), set enforcement to **Active**, and require
+   a pull request before merging. Preserve existing deletion/force-push rules.
+2. Enable **Require status checks to pass**, add the exact `checks` context after
+   a PR run has reported it, and select **GitHub Actions** as its expected source.
+3. Enable **Require branches to be up to date before merging**. Keep bypass
+   actors empty so the check requirement cannot be routinely bypassed. If the
+   base advances, arrange a separately approved branch update and rerun CI.
+4. Verify the latest PR's Checks tab shows the `CI` run and successful `checks`
+   job, inspect that all required steps actually ran, and confirm the merge box
+   treats it as required. A green local test run does not establish this.
+
+On 2026-10-22 the readable `Protect main` ruleset was Active, targeted the default
+branch, required a PR and blocked deletion/force pushes, with no bypass actors;
+it did **not** require status checks. The connected integration could not read
+classic protection (403); the local GitHub CLI confirmed no classic rule (404).
+No settings were changed, and CI merge
+enforcement must not be claimed until an administrator verifies the requirement.
+Recheck the current settings rather than treating this dated observation as live
+state. See [GitHub's required-check guidance](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks).
+The current workflow has no `merge_group` trigger; adopting a merge queue needs a
+separately reviewed workflow update before requiring this check in that queue.
 
 ### Golden regression subset (Phase 11A)
 
@@ -225,4 +275,24 @@ application acceptance after runtime assertions, not model reasoning or semantic
 answer quality. In particular, accepting valid `NO_BUG_FOUND` does not fix or
 reproduce the live provider's known validation failures. Historical V1/V2 results
 remain live-evaluation observations, not deterministic test scores. Regression
-gates and the evaluation runbook remain Phase 11C follow-up work.
+gates and live evaluation have separate responsibilities as described above.
+
+### Maintaining Golden coverage
+
+1. Start from a concrete failure or changed contract. Reuse canonical cases via
+   `load_evaluation_cases` and existing Sandbox initialization/reset/setup; do not
+   copy case definitions or edit the frozen V1 dataset. A case outside that frozen
+   set needs a separately reviewed dataset/version decision.
+2. Assert independent observations: real HTTP status/body, documented schema,
+   persisted state, validation failures, or request-ID/log relationships. Inject
+   deterministic providers only where needed; a canned diagnosis or judge label
+   followed by an equality assertion does not prove correctness. Do not require
+   one tool order when several investigations are valid.
+3. Include relevant failure boundaries and verify reset/session isolation. Preserve
+   the deliberately seeded bugs unless a separately approved behavior change
+   intentionally changes them. Review changed expectations against the contract;
+   do not weaken assertions, drop cases or suppress failures to obtain green CI.
+4. Run `python -m pytest -m golden`, then the full offline checks above. For a new
+   material invariant, temporarily violate it in an isolated negative control and
+   confirm the assertion fails; remove the mutation and rerun affected checks.
+   Keep the final diff free of intentional failures and private evidence.
