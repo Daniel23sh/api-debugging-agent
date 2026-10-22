@@ -30,6 +30,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["golden: deterministic offline system regression contracts"]
 
 [tool.ruff]
 target-version = "py311"

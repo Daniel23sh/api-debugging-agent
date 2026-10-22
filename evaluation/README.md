@@ -166,3 +166,28 @@ git diff --check
 
 Tests use local/mocked providers only, including SDK HTTP errors and tracing.
 The Phase 6 dataset, contract and reproducibility tests remain unchanged.
+
+### Golden regression subset (Phase 11A)
+
+```bash
+python -m pytest -m golden
+```
+
+`tests/test_golden_regression.py` selects seven canonical V1 cases: inventory zero
+validation, missing-product status, order quantity totals, missing-inventory
+runtime failure, order response schema, valid order-creation status, and a report
+with no endpoint. It uses temporary SQLite fixtures, canonical setup requests,
+in-process Sandbox HTTP, real tools and the agent loop with a deterministic
+decision provider. Each case runs twice after reset to check state isolation.
+The recorder and deterministic evaluators check tool arguments and evidence
+links, including HTTP failure/request-ID/log correlation. Negative probes cover
+invalid arguments, forbidden endpoints and missing logs; an unrelated request ID
+must fail the log-argument evaluator.
+
+Network connections are blocked in this module; no API key, OpenAI call, judge
+service or Phoenix instance is required. Scripted final diagnoses check structured
+application acceptance after runtime assertions, not model reasoning or semantic
+answer quality. In particular, accepting valid `NO_BUG_FOUND` does not fix or
+reproduce the live provider's known validation failures. Historical V1/V2 results
+remain live-evaluation observations, not deterministic test scores. CI wiring and
+regression gates/runbook remain Phase 11B/11C follow-ups.
