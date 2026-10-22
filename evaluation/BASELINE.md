@@ -337,3 +337,92 @@ It is prominently labeled as offline and is not model-quality evidence. Focused
 tests also exercise mock V2 live orchestration, paid refusal, resume, original
 archive reads, cohort/source drift, missing data and privacy without real OpenAI
 requests.
+
+## Phase 11C — live evaluation runbook
+
+Normal PRs use the [deterministic merge gates](README.md#merge-gates-and-repository-configuration-phase-11c).
+Consider a separately approved live experiment after meaningful changes to agent
+instructions, model/reasoning settings, tool behavior or decision execution, and
+before a release that depends on changed agent quality. Documentation-only or
+ordinary test/CI changes do not automatically justify paid execution. No CI
+workflow invokes the live runners, rejudging or paid comparisons.
+
+### Prepare without spending
+
+1. State the hypothesis, intended intervention, cases, comparison reference,
+   model/settings and success/trade-off questions before collecting results. Run
+   the offline checks first and review the complete code diff. Preserve original
+   V1/V2 reports, snapshots, initial labels, exact source refs and Git history.
+2. Check whether the existing protocol fits. `baseline_live preflight --variant
+   v2` and `evaluation.compare` implement **V1 versus V2 prompt-only** comparisons:
+   same dataset, fixture, configuration/models, limits, controlled definitions,
+   initial evaluation and recorded runtime versions. They are not generic V3 or
+   arbitrary model/tool comparison commands. Model-setting or protected tool/
+   evaluator changes require a separately approved experiment/compatibility design
+   before paid collection. Do not relabel them V2, edit manifests or relax checks
+   to force a comparison. Runtime drift also prevents a controlled comparison.
+3. For a compatible prompt investigation, use a fresh ignored experiment directory
+   and the existing [V2 preflight command](#phase-10--controlled-v2-preparation-and-later-execution)
+   with the original V1 directory/report/source ref. Set `OPENAI_MODEL` and
+   `OPENAI_REASONING_EFFORT`, and supply the explicit `--judge-model`; inspect options with
+   `python -m evaluation.baseline_live --help`. Run the final approved source and
+   constrained Python environment; keep sources unchanged after preflight.
+4. Start an approved local Phoenix instance with separate private storage, set
+   credentials locally, and unset `PYTHON_DOTENV_DISABLED` from offline testing
+   if `.env` loading is intended. Preflight checks configuration, isolated fixtures
+   and reproductions, then exports/retrieves a synthetic Phoenix span. It requires
+   local Phoenix and a configured OpenAI key but makes zero OpenAI calls. A failed
+   or stale preflight is not execution approval; resolve it before paid work.
+
+### Approve, execute and retain provenance
+
+Review the manifest's exact models, settings, source/dataset/runtime identities,
+case order, reference binding and Phoenix project. Present the expected agent
+and judge workload and usage estimate, noting that execution limits do not imply
+a monetary cap. Obtain explicit human approval for those details **before** using
+the documented `python -m evaluation.baseline_live run DIRECTORY --approve-paid`
+command. The flag acknowledges approval; it cannot grant it. Documenting these
+commands does not authorize a live run.
+
+The runner uses isolated Sandbox state and append-only execution/evaluation
+artifacts. Resume the same approved directory under identical source/runtime
+conditions; do not repeat completed paid cases in a new directory to improve the
+score. Preserve interrupted/failed outcomes. Additional agent calls or rejudging
+need separate approval; any approved re-evaluation uses a new evaluation revision
+and keeps initial labels. Follow the existing interruption/re-evaluation rules
+above rather than editing snapshots or terminal files.
+
+Use `python -m evaluation.baseline_live verify-traces DIRECTORY` to check telemetry
+availability after fixing ingestion, without recollecting or judging; it still
+needs Phoenix. `python -m evaluation.baseline summary DIRECTORY` writes a new
+report and enforces current source/runtime identity. Use
+`python -m evaluation.baseline archive DIRECTORY --report-id REPORT_UUID` for
+read-only historical access after source or environment changes. These commands
+do not invoke OpenAI. Retain raw snapshots,
+judgments, trace checks and Phoenix storage under ignored private local artifacts.
+They may contain reports, logs, source and diagnosis text: never commit them or
+upload them in CI. Review any sanitized aggregates separately before publication.
+
+### Review results before accepting a behavior change
+
+Run the existing `python -m evaluation.compare` command above on saved **initial**
+reports, supplying both exact source refs when current sources differ. It performs
+no agent or judge calls. Keep the sanitized output privately with the experiment;
+never bypass cohort, source or provenance failures. Review per-case losses of
+previous successes and representative runtime evidence, not just aggregate gains.
+
+Preserve `SCORED`, `NOT_APPLICABLE`, `UNDETERMINED`, `ERROR`, missing-unit coverage
+and execution failures as distinct states. Investigate evaluator uncertainty with
+human evidence review; do not convert missing judgments into successes or silently
+replace initial labels. Review quality independently from root cause/grounding,
+then consider latency, model calls, tokens, tool paths, retries, errors and their
+measurement coverage. A cheaper/faster run is not automatically more correct.
+Document material regressions and accepted trade-offs for human approval; do not
+weaken deterministic gates or reinterpret historical evaluator semantics.
+
+The [observed V2 result](reports/v1-v2-experiment-2026-10-21.md) was 15/18 strict
+successes versus V1's 13/18, without losing previous strict successes. It is a
+historical reference from one run per case, not a universal CI threshold or a
+guarantee for future stochastic runs. The two live `NO_BUG_FOUND` failures remain;
+deterministic acceptance tests do not establish live provider quality. A live
+result review is a human release/behavior decision, separate from passing CI.
