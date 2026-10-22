@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="390" viewBox="0 0 960 390" role="img" aria-labelledby="title desc">
+  <title id="title">Recorded V1 and V2 strict successes</title>
+  <desc id="desc">Visualization of recorded results, not a screenshot. V1: 13 of 18 (72.2%). V2: 15 of 18 (83.3%). All 13 V1 strict successes retained. One run per case per version; not a statistical reliability estimate. Source: evaluation/reports/v1-v2-experiment-2026-10-21.md.</desc>
+  <rect width="960" height="390" fill="#f8fafc" />
+  <text x="40" y="46" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#0f172a" font-weight="700">Recorded strict successes</text>
+  <text x="40" y="76" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#334155" font-weight="400">18 frozen cases · one live run per case per version</text>
+  <text x="40" y="148" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#0f172a" font-weight="700">V1</text>
+  <rect x="112" y="119" width="576" height="44" rx="5" fill="#e2e8f0" />
+  <rect x="112" y="119" width="416.0" height="44" rx="5" fill="#475569" />
+  <text x="718" y="148" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#475569" font-weight="700">13/18 (72.2%)</text>
+  <text x="40" y="222" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#0f172a" font-weight="700">V2</text>
+  <rect x="112" y="193" width="576" height="44" rx="5" fill="#e2e8f0" />
+  <rect x="112" y="193" width="480.0" height="44" rx="5" fill="#0f766e" />
+  <text x="718" y="222" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#0f766e" font-weight="700">15/18 (83.3%)</text>
+  <line x1="112.0" x2="112.0" y1="247" y2="253" stroke="#64748b" />
+  <text x="107.0" y="275" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#334155" font-weight="400">0</text>
+  <line x1="304.0" x2="304.0" y1="247" y2="253" stroke="#64748b" />
+  <text x="299.0" y="275" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#334155" font-weight="400">6</text>
+  <line x1="496.0" x2="496.0" y1="247" y2="253" stroke="#64748b" />
+  <text x="491.0" y="275" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#334155" font-weight="400">12</text>
+  <line x1="688.0" x2="688.0" y1="247" y2="253" stroke="#64748b" />
+  <text x="683.0" y="275" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#334155" font-weight="400">18</text>
+  <text x="40" y="315" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#0f172a" font-weight="700">All 13 original strict successes retained; two target cases improved.</text>
+  <text x="40" y="344" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#334155" font-weight="400">Strict success requires status match + grounding + correct root cause where applicable.</text>
+  <text x="40" y="370" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#475569" font-weight="400">Source: controlled V1/V2 report, 2026-10-21. No statistical reliability or billing claim.</text>
+</svg>
