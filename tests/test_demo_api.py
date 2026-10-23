@@ -133,6 +133,29 @@ def test_response_requires_a_valid_existing_diagnosis():
         DemoDebugResponse.model_validate({"diagnosis": {"status": "RESOLVED"}, "steps": []})
 
 
+def test_evidence_only_limit_from_injected_provider_remains_valid_and_private():
+    diagnosis = DebugDiagnosis(
+        status="LIMIT_REACHED",
+        evidence=[{"source": "endpoint_implementation", "finding": PRIVATE}],
+    )
+
+    class LimitProvider:
+        async def next_decision(self, state):
+            return FinalAnswerDecision(kind="final_answer", diagnosis=diagnosis)
+
+    client = TestClient(create_app(LimitProvider))
+    response = client.post("/demo/debug", json={"issue": "report"})
+    assert response.status_code == 200
+    result = DemoDebugResponse.model_validate(response.json())
+    assert result.diagnosis.status == "LIMIT_REACHED"
+    assert result.diagnosis.evidence == []
+    assert result.diagnosis.missing_evidence == ["Investigation limit reached"]
+    assert result.steps == [] and PRIVATE not in response.text
+    regular = client.post("/debug", json={"issue": "report"})
+    assert regular.status_code == 200
+    assert DebugDiagnosis.model_validate(regular.json()) == diagnosis
+
+
 @pytest.mark.parametrize("scenario", [None, *DemoScenario])
 def test_early_final_is_real_and_has_empty_timeline(scenario, temporary_paths):
     provider = Scripted(final())

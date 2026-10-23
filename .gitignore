@@ -14,3 +14,6 @@ sandbox.db-wal
 
 docs/
 evaluation/artifacts/
+node_modules/
+frontend/.vitest/
+frontend/coverage/

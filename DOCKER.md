@@ -46,6 +46,36 @@ ASGI transport and a fresh SQLite file under the container's temporary directory
 It needs no write access to `/data` and never resets the shared Sandbox or its logs.
 See the [demo API contract and scenarios](README.md#local-portfolio-demo-api).
 
+## Portfolio frontend
+
+Run `docker compose up --build -d --wait` from the repository root to start the
+current backend code. Then use Node 22.12+ (Node 22 LTS) in a separate terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [APILens](http://127.0.0.1:5173). Select a sample or enter a custom issue,
+acknowledge the possible OpenAI cost, and start the investigation. Review the
+returned tool timeline and diagnosis. Editing a sample switches to free-form
+fixtures. Scenarios do not force tool choices or a resolved diagnosis.
+
+Vite listens on loopback and proxies `/demo` to the Agent at `127.0.0.1:8001`.
+The browser never contacts OpenAI or receives credentials. A missing key produces
+HTTP 503; set `OPENAI_API_KEY` in the private backend `.env` and recreate the Agent
+with `docker compose up -d agent-service`. Do not add frontend key variables.
+If the backend is unavailable, verify `docker compose ps` and
+`http://127.0.0.1:8001/openapi.json`; if `/demo/debug` returns 404, rebuild the older
+Agent image. Port 5173 must be free; Vite intentionally fails instead of silently
+switching ports. No live requests run during installation, startup, tests, or build.
+
+The frontend runs outside Compose for this local workflow. Its production build
+does not add a public server or change Docker images, ports, or persistent volumes.
+
+## Tracing storage
+
 Phoenix uses its default SQLite backend under
 `PHOENIX_WORKING_DIR=/home/nonroot/.phoenix`. Mounting its existing non-root home
 preserves the image's directory ownership on a fresh volume. Compose explicitly

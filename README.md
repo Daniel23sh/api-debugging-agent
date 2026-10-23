@@ -18,7 +18,7 @@ In one recorded 18-case comparison, a focused investigation-guidance change
 increased strict successes from **13/18 to 15/18**, retaining all 13 prior
 successes. This is a limited historical observation, not a reliability guarantee.
 
-[Run locally](#run-locally) · [Recorded results](#what-the-experiments-showed) ·
+[Run locally](#run-locally) · [Portfolio demo](#portfolio-frontend) · [Recorded results](#what-the-experiments-showed) ·
 [Evaluation guide](evaluation/README.md) · [Docker operations](DOCKER.md)
 
 ## Architecture
@@ -231,12 +231,44 @@ curl http://127.0.0.1:8001/debug \
   -d '{"issue":"POST /orders returns 500 for product 4 with quantity 1"}'
 ```
 
+### Portfolio frontend
+
+Start the backend with `docker compose up --build` as above. The optional
+single-page React/TypeScript client runs separately through Vite; use Node.js
+22.12+ on the supported Node 22 LTS line (`frontend/.nvmrc` selects 22):
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [APILens](http://127.0.0.1:5173). Choose one of four sample scenarios or enter
+a custom report, acknowledge the live OpenAI request and possible cost, then click
+**Start investigation**. Selecting a sample makes no request. Editing its report
+clears the scenario and switches to fresh default fixtures; selecting another
+sample replaces the report. Reports are locked while a request runs. The completed
+timeline and diagnosis arrive together; edits and new runs clear previous results.
+
+Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
+produce an actionable error. Never put a key in frontend files or `VITE_*`
+variables. The browser sends relative `POST /demo/debug` requests, which Vite
+proxies to `http://127.0.0.1:8001`. There is no backend CORS change. TypeScript
+types and Zod runtime validation follow the Pydantic/OpenAPI contract, including
+diagnosis status rules. Model text is rendered as plain React text.
+
+This is a trusted local demo, with no automatic retries, persistence, or streaming.
+A network failure does not prove the server stopped processing a paid request.
+The production build is a compilation check; use the Vite development server for
+the documented local proxy workflow. See [Docker operations](DOCKER.md#portfolio-frontend)
+for startup and connection troubleshooting.
+
 ### Local portfolio demo API
 
 `POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
 `/debug`, returning `{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[] }`
-after completion. It is intended for the optional one-page client; no frontend
-is included yet. Keep the service on localhost, as in Compose.
+after completion. The optional one-page client consumes this endpoint.
+Keep the service on localhost, as in Compose.
 **This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
 on the Agent Service. Startup and offline tests never request a model response.
 
@@ -297,9 +329,9 @@ a generic HTTP 502; invalid requests return HTTP 422 before model construction.
 Typed tool failures and limits remain recorded outcomes. `/debug` continues to
 return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
 
-Phase 13B can consume the completed JSON directly. Display an explicit live-request
-and cost notice before submission and render diagnosis text as untrusted text.
-There is no streaming, stored history, reset endpoint, or additional service.
+The frontend displays this completed JSON after an explicit live-request and cost
+acknowledgment. There is no streaming, stored history, reset endpoint, or additional
+backend service.
 
 ### Verify without paid calls
 
@@ -311,10 +343,17 @@ python -m mypy
 PYTHON_DOTENV_DISABLED=1 OPENAI_API_KEY= EVAL_JUDGE_MODEL= PHOENIX_COLLECTOR_ENDPOINT= python -m pytest
 git diff --check
 docker compose config --quiet
+cd frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
 GitHub Actions runs Ruff, scoped strict Mypy, and full pytest, including the
-Golden subset, on Ubuntu/Python 3.13. Golden tests use scripted decisions and
+Golden subset, on Ubuntu/Python 3.13. The same required `checks` job also runs the
+frontend install, TypeScript check, mocked-network Vitest/React Testing Library
+tests, and production build on Node 22. Golden tests use scripted decisions and
 mocked judgments alongside real local tools to validate deterministic contracts.
 They do **not** validate live LLM reasoning quality. See
 [CI coverage and merge gates](evaluation/README.md#offline-verification).
@@ -333,5 +372,6 @@ some historical acceptance failures cannot be diagnosed more precisely.
 The historical results are evidence of an observed improvement, not validation
 as a general-purpose autonomous debugger or incident-management product. Next
 investigation candidates include sanitized provider acceptance diagnostics and
-separately approved repeated measurements. No frontend, automatic repair,
-production integration, or additional live experiment is included here.
+separately approved repeated measurements. No automatic repair, production
+integration, or additional live experiment is included here. The
+optional frontend presents only the existing demo investigation and diagnosis.

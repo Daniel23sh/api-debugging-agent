@@ -198,7 +198,9 @@ def create_app(
             # The loop's fallback evidence contains raw tool data, not presentation text.
             diagnosis = DebugDiagnosis(
                 status=DiagnosisStatus.LIMIT_REACHED,
-                missing_evidence=diagnosis.missing_evidence,
+                missing_evidence=(
+                    diagnosis.missing_evidence or ["Investigation limit reached"]
+                ),
             )
         return DemoDebugResponse(diagnosis=diagnosis, steps=recorder.steps)
 
