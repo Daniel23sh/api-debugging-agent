@@ -13,9 +13,10 @@ docker compose up --build
 
 Subsequent starts can use `docker compose up`. For a detached start that waits
 for readiness, use `docker compose up -d --wait`. No OpenAI key is required for
-startup or the smoke checks below. Live `POST /debug` requests require valid
-OpenAI credentials and may incur API costs; startup and health checks never call
-OpenAI. Only the Agent receives the key, through its runtime environment.
+startup or the smoke checks below. Live `POST /debug` and `POST /demo/debug`
+requests require valid OpenAI credentials and may incur API costs; startup and
+health checks never call OpenAI. Only the Agent receives the key, through its
+runtime environment.
 Keep `.env` private and untracked. Use `docker compose config --quiet` when
 validating a real `.env`: the full rendered config and container inspection can
 reveal runtime secrets. No keys are passed as build arguments or copied into images.
@@ -39,6 +40,41 @@ stay beside the database. SQLite suits this small local stack; run one Sandbox
 worker and use local Docker volumes, not a network filesystem. Health checks use
 the existing OpenAPI endpoints; the Agent waits for Sandbox initialization and
 Phoenix database readiness. They do not require credentials or a new API route.
+
+`POST /demo/debug` instead runs a disposable Sandbox inside the Agent process using
+ASGI transport and a fresh SQLite file under the container's temporary directory.
+It needs no write access to `/data` and never resets the shared Sandbox or its logs.
+See the [demo API contract and scenarios](README.md#local-portfolio-demo-api).
+
+## Portfolio frontend
+
+Run `docker compose up --build -d --wait` from the repository root to start the
+current backend code. Then use Node 22.12+ (Node 22 LTS) in a separate terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [APILens](http://127.0.0.1:5173). Select a sample or enter a custom issue,
+acknowledge the possible OpenAI cost, and start the investigation. Review the
+returned tool timeline and diagnosis. Editing a sample switches to free-form
+fixtures. Scenarios do not force tool choices or a resolved diagnosis.
+
+Vite listens on loopback and proxies `/demo` to the Agent at `127.0.0.1:8001`.
+The browser never contacts OpenAI or receives credentials. A missing key produces
+HTTP 503; set `OPENAI_API_KEY` in the private backend `.env` and recreate the Agent
+with `docker compose up -d agent-service`. Do not add frontend key variables.
+If the backend is unavailable, verify `docker compose ps` and
+`http://127.0.0.1:8001/openapi.json`; if `/demo/debug` returns 404, rebuild the older
+Agent image. Port 5173 must be free; Vite intentionally fails instead of silently
+switching ports. No live requests run during installation, startup, tests, or build.
+
+The frontend runs outside Compose for this local workflow. Its production build
+does not add a public server or change Docker images, ports, or persistent volumes.
+
+## Tracing storage
 
 Phoenix uses its default SQLite backend under
 `PHOENIX_WORKING_DIR=/home/nonroot/.phoenix`. Mounting its existing non-root home

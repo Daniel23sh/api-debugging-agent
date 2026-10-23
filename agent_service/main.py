@@ -1,9 +1,11 @@
+import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from openinference.instrumentation import TracerProvider
 from openinference.semconv.trace import (
     OpenInferenceSpanKindValues,
     SpanAttributes,
@@ -21,9 +23,14 @@ from agent_service.agent import (
     run_agent,
 )
 from agent_service.agent.recording import SessionRecorder
-from agent_service.agent.schemas import NonEmptyStr
+from agent_service.agent.schemas import DiagnosisStatus, NonEmptyStr
+from agent_service.demo import (
+    DemoDebugResponse,
+    DemoRecorder,
+    DemoScenario,
+    demo_sandbox,
+)
 from agent_service.observability import (
-    TracerProvider,
     configure_openai_instrumentation,
     configure_tracing,
     get_tracer,
@@ -45,6 +52,10 @@ class DebugRequest(BaseModel):
         max_length=MAX_ISSUE_CHARS,
         description="Bug report, up to 4,000 characters after trimming outer whitespace.",
     )
+
+
+class DemoDebugRequest(DebugRequest):
+    scenario_id: DemoScenario | None = None
 
 
 async def run_debug_session(
@@ -153,6 +164,45 @@ def create_app(
             database=database,
             tracer=app.state.tracer,
         )
+
+    @app.post("/demo/debug", response_model=DemoDebugResponse)
+    async def demo_debug(request: DemoDebugRequest) -> DemoDebugResponse:
+        if (
+            provider_factory is OpenAIDecisionProvider
+            and not os.getenv("OPENAI_API_KEY", "").strip()
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail="Demo debugging requires OPENAI_API_KEY on the Agent Service.",
+            )
+        recorder = DemoRecorder()
+        try:
+            async with demo_sandbox(request.scenario_id) as (demo_database, demo_transport):
+                diagnosis = await run_debug_session(
+                    request.issue,
+                    provider_factory,
+                    transport=demo_transport,
+                    database=demo_database,
+                    tracer=app.state.tracer,
+                    recorder=recorder,
+                )
+        except Exception:  # noqa: BLE001 - keep private failures out of HTTP responses
+            raise HTTPException(
+                status_code=502, detail="Demo investigation failed."
+            ) from None
+        if recorder.provider_failed:
+            raise HTTPException(
+                status_code=502, detail="Demo model provider failed."
+            )
+        if diagnosis.status is DiagnosisStatus.LIMIT_REACHED:
+            # The loop's fallback evidence contains raw tool data, not presentation text.
+            diagnosis = DebugDiagnosis(
+                status=DiagnosisStatus.LIMIT_REACHED,
+                missing_evidence=(
+                    diagnosis.missing_evidence or ["Investigation limit reached"]
+                ),
+            )
+        return DemoDebugResponse(diagnosis=diagnosis, steps=recorder.steps)
 
     return app
 

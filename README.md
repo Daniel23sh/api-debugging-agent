@@ -18,7 +18,7 @@ In one recorded 18-case comparison, a focused investigation-guidance change
 increased strict successes from **13/18 to 15/18**, retaining all 13 prior
 successes. This is a limited historical observation, not a reliability guarantee.
 
-[Run locally](#run-locally) · [Recorded results](#what-the-experiments-showed) ·
+[Run locally](#run-locally) · [Portfolio demo](#portfolio-frontend) · [Recorded results](#what-the-experiments-showed) ·
 [Evaluation guide](evaluation/README.md) · [Docker operations](DOCKER.md)
 
 ## Architecture
@@ -231,6 +231,108 @@ curl http://127.0.0.1:8001/debug \
   -d '{"issue":"POST /orders returns 500 for product 4 with quantity 1"}'
 ```
 
+### Portfolio frontend
+
+Start the backend with `docker compose up --build` as above. The optional
+single-page React/TypeScript client runs separately through Vite; use Node.js
+22.12+ on the supported Node 22 LTS line (`frontend/.nvmrc` selects 22):
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [APILens](http://127.0.0.1:5173). Choose one of four sample scenarios or enter
+a custom report, acknowledge the live OpenAI request and possible cost, then click
+**Start investigation**. Selecting a sample makes no request. Editing its report
+clears the scenario and switches to fresh default fixtures; selecting another
+sample replaces the report. Reports are locked while a request runs. The completed
+timeline and diagnosis arrive together; edits and new runs clear previous results.
+
+Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
+produce an actionable error. Never put a key in frontend files or `VITE_*`
+variables. The browser sends relative `POST /demo/debug` requests, which Vite
+proxies to `http://127.0.0.1:8001`. There is no backend CORS change. TypeScript
+types and Zod runtime validation follow the Pydantic/OpenAPI contract, including
+diagnosis status rules. Model text is rendered as plain React text.
+
+This is a trusted local demo, with no automatic retries, persistence, or streaming.
+A network failure does not prove the server stopped processing a paid request.
+The production build is a compilation check; use the Vite development server for
+the documented local proxy workflow. See [Docker operations](DOCKER.md#portfolio-frontend)
+for startup and connection troubleshooting.
+
+### Local portfolio demo API
+
+`POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
+`/debug`, returning `{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[] }`
+after completion. The optional one-page client consumes this endpoint.
+Keep the service on localhost, as in Compose.
+**This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
+on the Agent Service. Startup and offline tests never request a model response.
+
+The request requires `issue`, with the same whitespace trimming and 4,000-character
+limit as `/debug`, and accepts an optional `scenario_id` from this table:
+
+| `scenario_id` | Reproduction to describe in the issue |
+| --- | --- |
+| `missing-inventory` | `POST /orders` with product 4, quantity 1 returns HTTP 500 |
+| `wrong-status` | `GET /products/999` returns HTTP 200 instead of 404 |
+| `incorrect-total` | `POST /orders` with product 2, quantity 2 returns total `129.50` |
+| `response-schema` | `GET /orders/1` returns `productId` instead of `product_id` |
+
+For example, once credentials are configured:
+
+```bash
+curl http://127.0.0.1:8001/demo/debug \
+  -H 'Content-Type: application/json' \
+  -d '{"issue":"GET /products/999 returns 200 instead of 404","scenario_id":"wrong-status"}'
+```
+
+Every demo request gets a fresh, temporary SQLite file with the standard Sandbox
+fixtures and an **in-process Sandbox application reached through ASGI transport**.
+It does not use the Compose Sandbox network or its persistent database/logs.
+POST/PATCH calls and request-ID log correlation use only this disposable database;
+concurrent requests have separate files. Files are removed on completion, failure,
+or cancellation. `response-schema` additionally prepares order 1 (product 1,
+quantity 1) before the agent starts. Preparation is absent from the timeline.
+The other scenarios need only default fixtures. Omitting `scenario_id` permits
+free-form reports against those same fresh fixtures. Scenario selection never
+changes the issue, forces tool choices, or guarantees `RESOLVED`.
+
+Each step has `kind` (`tool_attempt`, `rejected_action`, or `session_error`),
+an approved `tool_name` or null, optional approved `method` and normalized `route`,
+`success`, optional HTTP `status_code`, canonical UUID `request_id`, allowlisted
+`error_category`, and `retry`. Unavailable metadata is null; `retry` is true only
+for an actual timeout retry. Array order is execution order. A successful HTTP
+tool can observe HTTP 500; a rejected action was never executed. An early final
+answer can return `steps: []`. The diagnosis is separate; no final tool or timing
+is invented. For example, a step's sanitized shape is:
+
+```json
+{
+  "kind": "tool_attempt", "tool_name": "execute_api_request",
+  "method": "GET", "route": "/products/{product_id}", "success": true,
+  "status_code": 200, "request_id": "6c0df0f0-0a17-47f8-858e-8a92f3762c65",
+  "error_category": null, "retry": false
+}
+```
+
+This is an illustrative shape, not a recorded result. The memory-only recorder
+exports no arguments, bodies, source, log messages, model output, or reasoning.
+It does not read evaluation artifacts or Phoenix storage. The existing diagnosis
+contract supplies the final explanatory text; application-generated `LIMIT_REACHED`
+responses omit raw fallback evidence and retain the limit reason and safe steps.
+Missing credentials return a safe HTTP 503; provider/setup/execution failures return
+a generic HTTP 502; invalid requests return HTTP 422 before model construction.
+Typed tool failures and limits remain recorded outcomes. `/debug` continues to
+return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
+
+The frontend displays this completed JSON after an explicit live-request and cost
+acknowledgment. There is no streaming, stored history, reset endpoint, or additional
+backend service.
+
 ### Verify without paid calls
 
 In the activated development environment:
@@ -241,10 +343,17 @@ python -m mypy
 PYTHON_DOTENV_DISABLED=1 OPENAI_API_KEY= EVAL_JUDGE_MODEL= PHOENIX_COLLECTOR_ENDPOINT= python -m pytest
 git diff --check
 docker compose config --quiet
+cd frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
 GitHub Actions runs Ruff, scoped strict Mypy, and full pytest, including the
-Golden subset, on Ubuntu/Python 3.13. Golden tests use scripted decisions and
+Golden subset, on Ubuntu/Python 3.13. The same required `checks` job also runs the
+frontend install, TypeScript check, mocked-network Vitest/React Testing Library
+tests, and production build on Node 22. Golden tests use scripted decisions and
 mocked judgments alongside real local tools to validate deterministic contracts.
 They do **not** validate live LLM reasoning quality. See
 [CI coverage and merge gates](evaluation/README.md#offline-verification).
@@ -263,5 +372,6 @@ some historical acceptance failures cannot be diagnosed more precisely.
 The historical results are evidence of an observed improvement, not validation
 as a general-purpose autonomous debugger or incident-management product. Next
 investigation candidates include sanitized provider acceptance diagnostics and
-separately approved repeated measurements. No frontend, automatic repair,
-production integration, or additional live experiment is included here.
+separately approved repeated measurements. No automatic repair, production
+integration, or additional live experiment is included here. The
+optional frontend presents only the existing demo investigation and diagnosis.
