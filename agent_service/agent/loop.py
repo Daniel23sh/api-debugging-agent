@@ -13,6 +13,7 @@ from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
 from opentelemetry.trace import Span, Status, StatusCode, Tracer
 
 from agent_service.agent.dispatch import (
+    TOOL_REGISTRY,
     ToolDispatchResult,
     canonical_call_identity,
     dispatch_tool_call,
@@ -29,7 +30,7 @@ from agent_service.agent.schemas import (
     ToolCallRecord,
 )
 from agent_service.agent.state import AgentLimits, DebugSessionState
-from agent_service.observability import get_tracer
+from agent_service.observability import get_tracer, safe_tool_metadata
 from sandbox_api.db import Database
 
 MAX_TRACE_VALUE_CHARS = 256
@@ -91,11 +92,7 @@ def _record_selected_tool(span: Span, tool_call: ToolCallRecord) -> None:
         ToolCallAttributes.TOOL_CALL_FUNCTION_NAME,
         tool_call.tool_name[:MAX_TRACE_VALUE_CHARS],
     )
-    safe_arguments = {
-        key: value[:MAX_TRACE_VALUE_CHARS]
-        for key in ("method", "path", "request_id")
-        if isinstance((value := tool_call.arguments.get(key)), str)
-    }
+    safe_arguments = safe_tool_metadata(tool_call.arguments)
     if safe_arguments:
         span.set_attribute(
             ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON,
@@ -230,10 +227,11 @@ async def _run_agent(
                     decision_span.set_attribute(
                         "apilens.decision.selected_action", "TOOL_CALL"
                     )
-                    decision_span.set_attribute(
-                        ToolCallAttributes.TOOL_CALL_FUNCTION_NAME,
-                        decision.tool_name[:MAX_TRACE_VALUE_CHARS],
-                    )
+                    if decision.tool_name in TOOL_REGISTRY:
+                        decision_span.set_attribute(
+                            ToolCallAttributes.TOOL_CALL_FUNCTION_NAME,
+                            decision.tool_name,
+                        )
                     prepared = prepare_tool_call(decision)
                     if isinstance(prepared, ToolDispatchResult):
                         error = prepared.observation.error
@@ -242,7 +240,7 @@ async def _run_agent(
                         _mark_decision_error(
                             decision_span,
                             str(error["type"]),
-                            str(error["message"]),
+                            "Tool call rejected",
                         )
                         state.record_feedback(prepared.observation)
                         continue

@@ -11,7 +11,7 @@ from openinference.semconv.trace import (
 from opentelemetry.context import Context
 from opentelemetry.semconv.attributes.error_attributes import ERROR_TYPE
 from opentelemetry.trace import Status, StatusCode, Tracer
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from agent_service.agent import (
     DebugDiagnosis,
@@ -27,6 +27,7 @@ from agent_service.observability import (
     configure_openai_instrumentation,
     configure_tracing,
     get_tracer,
+    safe_diagnosis_endpoint,
     shutdown_openai_instrumentation,
     shutdown_tracing,
 )
@@ -34,12 +35,16 @@ from sandbox_api.db import Database
 
 ProviderFactory = Callable[[], DecisionProvider]
 TracingFactory = Callable[[], TracerProvider | None]
+MAX_ISSUE_CHARS = 4000
 
 
 class DebugRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    issue: NonEmptyStr
+    issue: NonEmptyStr = Field(
+        max_length=MAX_ISSUE_CHARS,
+        description="Bug report, up to 4,000 characters after trimming outer whitespace.",
+    )
 
 
 async def run_debug_session(
@@ -94,10 +99,9 @@ async def run_debug_session(
                 diagnosis.suggested_fix is not None
             ),
         }
-        if diagnosis.affected_endpoint is not None:
-            final_attributes["apilens.diagnosis.affected_endpoint"] = (
-                diagnosis.affected_endpoint[:256]
-            )
+        endpoint = safe_diagnosis_endpoint(diagnosis.affected_endpoint)
+        if endpoint is not None:
+            final_attributes["apilens.diagnosis.affected_endpoint"] = endpoint
         with tracer.start_as_current_span(
             "final_diagnosis", attributes=final_attributes
         ):

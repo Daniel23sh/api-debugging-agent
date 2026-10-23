@@ -926,8 +926,17 @@ async def test_all_tool_spans_record_only_bounded_structural_metadata(
     )
     assert spans["execute_api_request"].attributes["apilens.tool.status_code"] == 200
     assert spans["execute_api_request"].attributes["apilens.tool.request_id"]
+    assert spans["execute_api_request"].attributes["apilens.tool.path"] == (
+        "/products/{product_id}"
+    )
     assert spans["inspect_server_logs"].attributes["apilens.tool.logs_found"] is True
     assert spans["inspect_server_logs"].attributes["apilens.tool.event_count"] == 1
+    assert spans["inspect_server_logs"].attributes["apilens.tool.request_id"] == (
+        str(logged_request_id)
+    )
+    assert json.loads(spans["inspect_server_logs"].attributes[
+        ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON
+    ]) == {"request_id": str(logged_request_id)}
     assert spans["inspect_endpoint_implementation"].attributes[
         "apilens.tool.implementation_found"
     ] is True
@@ -942,6 +951,128 @@ async def test_all_tool_spans_record_only_bounded_structural_metadata(
     assert repr(schema) not in trace_data
     assert "do-not-trace-this-log-message" not in trace_data
     assert "Mechanical Keyboard" not in trace_data
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "route", "endpoint", "safe_endpoint"),
+    [
+        ("GET", "/products/PRIVATE_PRODUCT", "/products/{product_id}",
+         "GET /products/PRIVATE_DIAGNOSIS", "GET /products/{product_id}"),
+        ("GET", "/orders/PRIVATE_ORDER", "/orders/{order_id}",
+         "/orders/PRIVATE_DIAGNOSIS", "/orders/{order_id}"),
+        ("PATCH", "/inventory/PRIVATE_INVENTORY", "/inventory/{product_id}",
+         "PATCH /inventory/{product_id}", "PATCH /inventory/{product_id}"),
+        ("POST", "/orders", "/orders", "POST /orders", "POST /orders"),
+        ("POST", "/payments", "/payments", "POST /payments", "POST /payments"),
+        ("GET", "/products/PRIVATE_QUERY?token=PRIVATE_TOKEN", None,
+         "GET /products/PRIVATE_QUERY?token=PRIVATE_TOKEN", None),
+        ("GET", "/products/%50RIVATE_ENCODED", None,
+         "GET /products/%50RIVATE_ENCODED", None),
+        ("GET", "/products/PRIVATE_FRAGMENT#PRIVATE_TOKEN", None,
+         "GET /products/PRIVATE_FRAGMENT#PRIVATE_TOKEN", None),
+        ("GET", "https://user:PRIVATE_PASSWORD@host/products/1", None,
+         "https://user:PRIVATE_PASSWORD@host/products/1", None),
+        ("GET", "/unapproved/PRIVATE_PATH", None, "PRIVATE_ARBITRARY_TEXT", None),
+        ("GET", "/products/../PRIVATE_PATH", None,
+         "/products/../PRIVATE_PATH", None),
+        ("GET", "/products/PRIVATE_BACK\\slash", None,
+         "/products/PRIVATE_BACK\\slash", None),
+        ("GET", "/products/PRIVATE_CONTROL\tsegment", None,
+         "/products/PRIVATE_CONTROL\tsegment", None),
+        ("POST", "/products/PRIVATE_WRONG_METHOD", None,
+         "POST /products/PRIVATE_WRONG_METHOD", None),
+    ],
+)
+def test_untrusted_endpoint_metadata_is_safe_in_exported_spans(
+    monkeypatch, method, path, route, endpoint, safe_endpoint,
+) -> None:
+    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+    exporter = RecordingExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+    tool_names = [
+        "inspect_api_spec", "execute_api_request", "inspect_endpoint_implementation"
+    ]
+    calls = [
+        ("PRIVATE_UNKNOWN_TOOL_PATH", {}),
+        ("inspect_server_logs", {"request_id": "PRIVATE_INVALID_REQUEST_ID"}),
+        *[(name, {"method": method, "path": path}) for name in tool_names],
+    ]
+    model_requests = []
+
+    def model_response(request: httpx.Request) -> httpx.Response:
+        index = len(model_requests)
+        model_requests.append(json.loads(request.content))
+        if index < len(calls):
+            name, arguments = calls[index]
+            response = sdk_tool_response(
+                f"model-{index}", name=name, arguments=json.dumps(arguments)
+            )
+        else:
+            response = sdk_final_response("final", diagnosis={
+                "status": "INCONCLUSIVE", "affected_endpoint": endpoint,
+                "missing_evidence": ["More evidence needed"],
+            })
+        return httpx.Response(200, json=response)
+
+    openai_http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(model_response)
+    )
+    openai_client = AsyncOpenAI(
+        api_key="test-key", http_client=openai_http_client, max_retries=0
+    )
+    document = create_sandbox_app().openapi()
+
+    def sandbox_response(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/openapi.json":
+            return httpx.Response(200, json=document)
+        return httpx.Response(
+            200, json={"detail": "PRIVATE_RESPONSE_BODY"},
+            headers={REQUEST_ID_HEADER: "PRIVATE_RESPONSE_REQUEST_ID"},
+        )
+
+    app = create_app(
+        lambda: OpenAIDecisionProvider(client=openai_client),
+        transport=httpx.MockTransport(sandbox_response),
+        tracing_factory=lambda: tracer_provider,
+    )
+    with TestClient(app) as client:
+        response = client.post("/debug", json={"issue": "Investigate safely"})
+    asyncio.run(openai_http_client.aclose())
+
+    assert response.status_code == 200
+    assert response.json()["affected_endpoint"] == endpoint
+    assert len(model_requests) == len(calls) + 1
+    spans = exporter.get_finished_spans()
+    decisions = [span for span in spans if span.name == "agent_decision"]
+    tools = [span for span in spans if span.name in tool_names]
+    assert len(tools) == 3
+    assert decisions[0].attributes[ERROR_TYPE] == "TOOL_NOT_FOUND"
+    assert ToolCallAttributes.TOOL_CALL_FUNCTION_NAME not in decisions[0].attributes
+    assert decisions[1].attributes[ERROR_TYPE] == "TOOL_ARGUMENT_VALIDATION_ERROR"
+    assert decisions[1].attributes[ToolCallAttributes.TOOL_CALL_FUNCTION_NAME] == (
+        "inspect_server_logs"
+    )
+    expected_arguments = {"method": method}
+    if route is not None:
+        expected_arguments["path"] = route
+    for span in [*decisions[2:5], *tools]:
+        assert json.loads(span.attributes[
+            ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON
+        ]) == expected_arguments
+    for span in tools:
+        assert span.attributes["apilens.tool.success"] is (route is not None)
+        assert span.attributes.get("apilens.tool.path") == route
+        assert "apilens.tool.request_id" not in span.attributes
+    final = next(span for span in spans if span.name == "final_diagnosis")
+    assert final.attributes.get("apilens.diagnosis.affected_endpoint") == safe_endpoint
+    if route is not None:
+        assert "PRIVATE_RESPONSE_REQUEST_ID" in repr(model_requests)
+    for span in spans:
+        assert "PRIVATE_" not in repr(span.attributes)
+        assert "PRIVATE_" not in str(span.status.description)
+        assert "PRIVATE_" not in span.name
+        for event in span.events:
+            assert "PRIVATE_" not in repr(event.attributes)
 
 
 class RetryProvider:

@@ -96,7 +96,8 @@ and [dispatch boundary](agent_service/agent/dispatch.py).
 OpenTelemetry and OpenInference export one `DebugSession` trace with
 `agent_decision` spans, automatic LLM children, tool spans, and `final_diagnosis`.
 Tool executions are siblings of decisions, not model-executed actions. Metadata
-includes safe endpoint, request-ID, timing, token-usage, and status information.
+includes approved route templates, canonical request UUIDs, timing, token-usage,
+and status information. Unrecognized endpoint metadata is omitted.
 Raw issues, model input/output, HTTP bodies, log messages, and source contents are
 excluded from trace attributes; LLM error text is sanitized. Investigation input
 and tool evidence still go to OpenAI during live reasoning. Opt-in evaluation
@@ -216,6 +217,11 @@ For host tracing, start Phoenix first (for example,
 `PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006` in `.env`.
 Otherwise set it blank to disable export. Restart the Agent after configuration
 changes. Stop conflicting Docker services before using the same host ports.
+
+`POST /debug` accepts a non-empty issue of up to 4,000 characters after trimming
+outer whitespace. Longer issues receive HTTP 422 before provider construction;
+reports are never silently truncated. This is a text limit, not an HTTP body-size
+limit.
 
 A **paid live example**, once credentials are configured:
 

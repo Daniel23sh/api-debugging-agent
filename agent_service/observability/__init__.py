@@ -1,5 +1,6 @@
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from uuid import UUID
 
 from openinference.instrumentation import REDACTED_VALUE, TraceConfig, TracerProvider
 from openinference.instrumentation.openai import OpenAIInstrumentor
@@ -15,12 +16,58 @@ from opentelemetry.sdk.trace.export import (
 from opentelemetry.trace import NoOpTracerProvider, Status, StatusCode, Tracer
 from phoenix.otel import PROJECT_NAME, HTTPSpanExporter
 
+from agent_service.tools.contracts import HttpMethod
+from agent_service.tools.endpoints import normalize_approved_endpoint
+
 DEFAULT_PROJECT_NAME = "apilens"
 DEFAULT_SERVICE_NAME = "apilens-agent-service"
 INSTRUMENTATION_SCOPE = "agent_service"
 
 _NOOP_PROVIDER = NoOpTracerProvider()
 _PRIVATE_ERROR_FIELDS = {"exception.message", "exception.stacktrace"}
+
+
+def safe_tool_metadata(values: Mapping[str, object]) -> dict[str, str]:
+    """Export only approved route templates, methods, and canonical request UUIDs."""
+    metadata: dict[str, str] = {}
+    method_value = values.get("method")
+    if isinstance(method_value, str):
+        try:
+            method = HttpMethod(method_value)
+        except ValueError:
+            pass
+        else:
+            metadata["method"] = method.value
+            path = values.get("path")
+            if isinstance(path, str):
+                route = normalize_approved_endpoint(method, path)
+                if route is not None:
+                    metadata["path"] = route
+
+    request_id = values.get("request_id")
+    if isinstance(request_id, (str, UUID)):
+        try:
+            metadata["request_id"] = str(UUID(str(request_id)))
+        except ValueError:
+            pass
+    return metadata
+
+
+def safe_diagnosis_endpoint(value: str | None) -> str | None:
+    """Accept path-only or METHOD path diagnoses without exporting dynamic input."""
+    if value is None:
+        return None
+    if value.startswith("/"):
+        for method in HttpMethod:
+            route = normalize_approved_endpoint(method, value)
+            if route is not None:
+                return route
+        return None
+    method_value, _, path = value.partition(" ")
+    metadata = safe_tool_metadata({"method": method_value, "path": path})
+    if "path" in metadata:
+        return f"{metadata['method']} {metadata['path']}"
+    return None
 
 
 def _sanitize_llm_error(span: ReadableSpan) -> ReadableSpan:
