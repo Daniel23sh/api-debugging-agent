@@ -98,6 +98,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .submit-button:disabled { background: #243c37; border-color: #38544e; color: #b2c3be; }
 .submit-hint { color: var(--muted); text-align: center; font-size: 11px; line-height: 1.7; margin-top: 12px; }
 .results-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.technical-trace { border: 1px solid var(--border); border-radius: 7px; padding: 5px 18px 14px; background: var(--surface); }
+.technical-trace a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--accent); font-size: 14px; text-underline-offset: 4px; }
+.technical-trace a:hover { color: var(--accent-strong); }
+.technical-trace p { color: var(--muted); font-size: 12px; line-height: 1.7; }
 .submitted-report { border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface); font-size: 13px; }
 .submitted-report summary { padding: 13px 18px; min-height: 44px; }
 .submitted-report p { border-top: 1px solid var(--border); padding: 15px 18px; color: var(--text); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }

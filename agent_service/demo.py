@@ -9,7 +9,15 @@ from typing import Literal
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from opentelemetry.trace import get_current_span
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+)
 
 from agent_service.agent.dispatch import DispatchErrorType
 from agent_service.agent.loop import LoopFeedbackType
@@ -70,6 +78,18 @@ class DemoDebugResponse(BaseModel):
 
     diagnosis: DebugDiagnosis
     steps: list[InvestigationStep]
+    trace_id: str | None = Field(
+        default=None, strict=True, min_length=32, max_length=32,
+        pattern=r"^[0-9a-f]{32}$",
+        description="Recording DebugSession trace ID; does not confirm Phoenix ingestion.",
+    )
+
+    @field_validator("trace_id")
+    @classmethod
+    def validate_trace_id(cls, value: str | None) -> str | None:
+        if value == "0" * 32:
+            raise ValueError("trace ID must be nonzero")
+        return value
 
 
 def _safe_step(
@@ -98,11 +118,17 @@ class DemoRecorder:
 
     def __init__(self) -> None:
         self.steps: list[InvestigationStep] = []
+        self.trace_id: str | None = None
         self.provider_failed = False
         self._selected: InvestigationStep | None = None
 
     def start(self, state: DebugSessionState, limits: AgentLimits) -> None:
-        pass
+        span = get_current_span()
+        context = span.get_span_context()
+        self.trace_id = (
+            f"{context.trace_id:032x}"
+            if span.is_recording() and context.is_valid else None
+        )
 
     def decision_started(self, state: DebugSessionState) -> None:
         self._selected = None

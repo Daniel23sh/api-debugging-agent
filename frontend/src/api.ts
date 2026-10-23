@@ -61,9 +61,16 @@ export const stepSchema = z.strictObject({
   retry: z.boolean().default(false),
 });
 
+export const traceIdSchema = z.string().length(32).regex(/^[0-9a-f]{32}$/)
+  .refine((value) => value !== '0'.repeat(32));
+
+export const phoenixTraceUrl = (traceId: string) =>
+  `http://127.0.0.1:6006/redirects/traces/${traceIdSchema.parse(traceId)}`;
+
 export const demoResponseSchema = z.strictObject({
   diagnosis: diagnosisSchema,
   steps: z.array(stepSchema),
+  trace_id: traceIdSchema.nullable().default(null),
 });
 
 export type ScenarioId = z.infer<typeof scenarioIdSchema>;

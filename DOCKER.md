@@ -88,6 +88,12 @@ set `DOCKER_PHOENIX_COLLECTOR_ENDPOINT=` in `.env` and recreate the Agent with
 address. Phoenix telemetry and external resource fetching are disabled. Existing
 trace privacy filters remain in effect; credentials are not sent to Phoenix.
 
+Completed frontend investigations can open their exact Phoenix trace on port 6006.
+The recording trace ID can precede ingestion; reopen the same link if it is not yet
+found. No exporter flush or extra investigation is needed. See the
+[frontend workflow](README.md#portfolio-frontend) for tracing availability
+and the direct-link presentation choice.
+
 ## Offline smoke checks
 
 These checks make no model requests and need no external runtime service:

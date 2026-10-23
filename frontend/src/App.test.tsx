@@ -26,6 +26,8 @@ describe('APILens workspace', () => {
     expect(costCheckbox()).not.toBeChecked();
     expect(screen.getByText('Every step has a source')).toBeVisible();
     expect(screen.queryByLabelText('Recorded investigation steps')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(document.querySelector('iframe')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -195,6 +197,53 @@ describe('APILens workspace', () => {
     expect(await screen.findByText('INCONCLUSIVE', { selector: 'code' })).toBeVisible();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers safe exact-trace navigation after completion without loading Phoenix', async () => {
+    const traceId = '0123456789abcdef0123456789abcdef';
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ...responseFixture(), trace_id: traceId }));
+    const user = await prepare();
+    await user.click(action());
+    const link = await screen.findByRole('link', { name: /View technical trace in Phoenix/ });
+    expect(link).toHaveAttribute('href', `http://127.0.0.1:6006/redirects/traces/${traceId}`);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByText(/export may still be pending or unavailable/)).toBeVisible();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(fetch).toHaveBeenCalledOnce();
+    await user.tab(); // Submitted report disclosure.
+    await user.tab();
+    expect(link).toHaveFocus();
+  });
+
+  it('hides trace navigation when tracing is absent', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(responseFixture()));
+    const user = await prepare();
+    await user.click(action());
+    expect(await screen.findByText('INCONCLUSIVE', { selector: 'code' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+  });
+
+  it('clears a previous trace on editing, loading, and failure', async () => {
+    const response = { ...responseFixture(), trace_id: '0123456789abcdef0123456789abcdef' };
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
+    const user = await prepare();
+    await user.click(action());
+    await screen.findByRole('link', { name: /technical trace/ });
+    await user.type(reportInput(), ' Edited.');
+    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
+    await user.click(action());
+    await screen.findByRole('link', { name: /technical trace/ });
+
+    let finish!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await user.click(action());
+    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    await act(async () => { finish(jsonResponse({ ...response, detail: 'PRIVATE' }, 502)); });
+    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 502');
+    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it('rejects an unexpected response instead of displaying a partial diagnosis', async () => {

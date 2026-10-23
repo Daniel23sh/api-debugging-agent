@@ -4,6 +4,7 @@ import { investigate, issueLength, MAX_ISSUE_CHARS } from './api';
 import type { DemoResponse, ScenarioId } from './api';
 import { Diagnosis } from './components/Diagnosis';
 import { Timeline } from './components/Timeline';
+import { TechnicalTrace } from './components/TechnicalTrace';
 import { scenarios } from './scenarios';
 
 type RunState = { status: 'idle' }
@@ -93,6 +94,7 @@ export default function App() {
         <p className="sr-only" role="status">{loading ? 'Investigation in progress. The report is locked until completion.' : run.status === 'success' ? 'Investigation complete. Timeline and diagnosis are available.' : ''}</p>
         <div className="results-column" aria-busy={loading}>
           {run.status !== 'idle' && <details className="submitted-report"><summary>Submitted report</summary><p>{run.report}</p></details>}
+          {run.status === 'success' && <TechnicalTrace traceId={run.response.trace_id} />}
           <section className="panel" aria-labelledby="timeline-title">
             <div className="panel-header"><div><p className="eyebrow">02 / THE INVESTIGATION</p><h2 id="timeline-title">Follow the evidence</h2></div><span className="panel-caption">{run.status === 'success' ? `${run.response.steps.length} recorded steps` : 'Execution timeline'}</span></div>
             {run.status === 'success' ? <Timeline steps={run.response.steps} /> : <div className="empty-state">

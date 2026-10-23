@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { demoResponseSchema, investigate, issueLength, stepSchema } from './api';
+import { demoResponseSchema, investigate, issueLength, phoenixTraceUrl, stepSchema } from './api';
 import { jsonResponse, responseFixture } from './test/fixtures';
 
 describe('Demo API client', () => {
@@ -73,5 +73,25 @@ describe('Demo API client', () => {
     expect(response.steps).toEqual([stepSchema.parse({ kind: 'tool_attempt' })]);
     expect(response.diagnosis.root_cause).toBeNull();
     expect(response.diagnosis.evidence).toEqual([]);
+    expect(response.trace_id).toBeNull();
+  });
+
+  it('builds an exact trace URL only on the trusted local Phoenix origin', async () => {
+    const traceId = '0123456789abcdef0123456789abcdef';
+    const response = { ...responseFixture(), trace_id: traceId };
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
+    expect(await investigate('report', null)).toEqual(response);
+    expect(phoenixTraceUrl(traceId)).toBe(`http://127.0.0.1:6006/redirects/traces/${traceId}`);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    '0'.repeat(32), 'A'.repeat(32), 'a'.repeat(31), 'a'.repeat(33), `${'a'.repeat(32)}\n`,
+    'https://PRIVATE.example/trace', '../PRIVATE', 'javascript:alert(1)', 123,
+  ])('rejects malformed trace metadata without displaying it or navigating %#', async (traceId) => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ...responseFixture(), trace_id: traceId }));
+    await expect(investigate('report', null)).rejects.toThrow('unexpected response');
+    expect(() => phoenixTraceUrl(traceId as string)).toThrow();
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });

@@ -250,6 +250,16 @@ clears the scenario and switches to fresh default fixtures; selecting another
 sample replaces the report. Reports are locked while a request runs. The completed
 timeline and diagnosis arrive together; edits and new runs clear previous results.
 
+When recording tracing is enabled, completed results also offer **View technical
+trace in Phoenix**, opening that investigation in a new tab. Phoenix must be
+running on [local port 6006](http://127.0.0.1:6006). Export is asynchronous: a trace
+ID does not guarantee successful ingestion. If Phoenix is unavailable or the trace
+is not found yet, reopen the same link later; another investigation is unnecessary.
+The action is hidden when no recording trace ID exists. Phoenix is never loaded
+automatically. Local verification with Phoenix 20.23.0 found no framing restrictions
+and a working desktop iframe, but its trace view was clipped at mobile width, so
+the demo uses direct navigation rather than an embedded viewer.
+
 Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
 produce an actionable error. Never put a key in frontend files or `VITE_*`
 variables. The browser sends relative `POST /demo/debug` requests, which Vite
@@ -266,7 +276,8 @@ for startup and connection troubleshooting.
 ### Local portfolio demo API
 
 `POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
-`/debug`, returning `{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[] }`
+`/debug`, returning
+`{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[], "trace_id": string | null }`
 after completion. The optional one-page client consumes this endpoint.
 Keep the service on localhost, as in Compose.
 **This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
@@ -328,6 +339,13 @@ Missing credentials return a safe HTTP 503; provider/setup/execution failures re
 a generic HTTP 502; invalid requests return HTTP 422 before model construction.
 Typed tool failures and limits remain recorded outcomes. `/debug` continues to
 return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
+
+`trace_id` is the active recording `DebugSession` root's OpenTelemetry trace ID:
+32 lowercase hexadecimal characters, never all zero, or null when tracing is
+disabled/nonrecording. It is correlation metadata, not authorization or proof of
+export. The frontend validates the ID and constructs only the trusted local URL
+`http://127.0.0.1:6006/redirects/traces/{trace_id}`. Phoenix 20.23.0 resolves the
+project itself; the demo performs no project lookup and exposes no trace payloads.
 
 The frontend displays this completed JSON after an explicit live-request and cost
 acknowledgment. There is no streaming, stored history, reset endpoint, or additional
