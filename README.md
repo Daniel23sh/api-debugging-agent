@@ -231,6 +231,76 @@ curl http://127.0.0.1:8001/debug \
   -d '{"issue":"POST /orders returns 500 for product 4 with quantity 1"}'
 ```
 
+### Local portfolio demo API
+
+`POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
+`/debug`, returning `{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[] }`
+after completion. It is intended for the optional one-page client; no frontend
+is included yet. Keep the service on localhost, as in Compose.
+**This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
+on the Agent Service. Startup and offline tests never request a model response.
+
+The request requires `issue`, with the same whitespace trimming and 4,000-character
+limit as `/debug`, and accepts an optional `scenario_id` from this table:
+
+| `scenario_id` | Reproduction to describe in the issue |
+| --- | --- |
+| `missing-inventory` | `POST /orders` with product 4, quantity 1 returns HTTP 500 |
+| `wrong-status` | `GET /products/999` returns HTTP 200 instead of 404 |
+| `incorrect-total` | `POST /orders` with product 2, quantity 2 returns total `129.50` |
+| `response-schema` | `GET /orders/1` returns `productId` instead of `product_id` |
+
+For example, once credentials are configured:
+
+```bash
+curl http://127.0.0.1:8001/demo/debug \
+  -H 'Content-Type: application/json' \
+  -d '{"issue":"GET /products/999 returns 200 instead of 404","scenario_id":"wrong-status"}'
+```
+
+Every demo request gets a fresh, temporary SQLite file with the standard Sandbox
+fixtures and an **in-process Sandbox application reached through ASGI transport**.
+It does not use the Compose Sandbox network or its persistent database/logs.
+POST/PATCH calls and request-ID log correlation use only this disposable database;
+concurrent requests have separate files. Files are removed on completion, failure,
+or cancellation. `response-schema` additionally prepares order 1 (product 1,
+quantity 1) before the agent starts. Preparation is absent from the timeline.
+The other scenarios need only default fixtures. Omitting `scenario_id` permits
+free-form reports against those same fresh fixtures. Scenario selection never
+changes the issue, forces tool choices, or guarantees `RESOLVED`.
+
+Each step has `kind` (`tool_attempt`, `rejected_action`, or `session_error`),
+an approved `tool_name` or null, optional approved `method` and normalized `route`,
+`success`, optional HTTP `status_code`, canonical UUID `request_id`, allowlisted
+`error_category`, and `retry`. Unavailable metadata is null; `retry` is true only
+for an actual timeout retry. Array order is execution order. A successful HTTP
+tool can observe HTTP 500; a rejected action was never executed. An early final
+answer can return `steps: []`. The diagnosis is separate; no final tool or timing
+is invented. For example, a step's sanitized shape is:
+
+```json
+{
+  "kind": "tool_attempt", "tool_name": "execute_api_request",
+  "method": "GET", "route": "/products/{product_id}", "success": true,
+  "status_code": 200, "request_id": "6c0df0f0-0a17-47f8-858e-8a92f3762c65",
+  "error_category": null, "retry": false
+}
+```
+
+This is an illustrative shape, not a recorded result. The memory-only recorder
+exports no arguments, bodies, source, log messages, model output, or reasoning.
+It does not read evaluation artifacts or Phoenix storage. The existing diagnosis
+contract supplies the final explanatory text; application-generated `LIMIT_REACHED`
+responses omit raw fallback evidence and retain the limit reason and safe steps.
+Missing credentials return a safe HTTP 503; provider/setup/execution failures return
+a generic HTTP 502; invalid requests return HTTP 422 before model construction.
+Typed tool failures and limits remain recorded outcomes. `/debug` continues to
+return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
+
+Phase 13B can consume the completed JSON directly. Display an explicit live-request
+and cost notice before submission and render diagnosis text as untrusted text.
+There is no streaming, stored history, reset endpoint, or additional service.
+
 ### Verify without paid calls
 
 In the activated development environment:

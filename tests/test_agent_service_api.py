@@ -124,7 +124,7 @@ def test_debug_requests_use_distinct_sessions_and_providers() -> None:
 def test_openapi_exposes_debug_request_and_diagnosis_response() -> None:
     schema = create_app(lambda: FakeProvider()).openapi()
 
-    assert set(schema["paths"]) == {"/debug"}
+    assert set(schema["paths"]) == {"/debug", "/demo/debug"}
     operation = schema["paths"]["/debug"]
     assert set(operation) == {"post"}
     post = operation["post"]

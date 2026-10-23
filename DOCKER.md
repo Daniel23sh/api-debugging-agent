@@ -13,9 +13,10 @@ docker compose up --build
 
 Subsequent starts can use `docker compose up`. For a detached start that waits
 for readiness, use `docker compose up -d --wait`. No OpenAI key is required for
-startup or the smoke checks below. Live `POST /debug` requests require valid
-OpenAI credentials and may incur API costs; startup and health checks never call
-OpenAI. Only the Agent receives the key, through its runtime environment.
+startup or the smoke checks below. Live `POST /debug` and `POST /demo/debug`
+requests require valid OpenAI credentials and may incur API costs; startup and
+health checks never call OpenAI. Only the Agent receives the key, through its
+runtime environment.
 Keep `.env` private and untracked. Use `docker compose config --quiet` when
 validating a real `.env`: the full rendered config and container inspection can
 reveal runtime secrets. No keys are passed as build arguments or copied into images.
@@ -39,6 +40,11 @@ stay beside the database. SQLite suits this small local stack; run one Sandbox
 worker and use local Docker volumes, not a network filesystem. Health checks use
 the existing OpenAPI endpoints; the Agent waits for Sandbox initialization and
 Phoenix database readiness. They do not require credentials or a new API route.
+
+`POST /demo/debug` instead runs a disposable Sandbox inside the Agent process using
+ASGI transport and a fresh SQLite file under the container's temporary directory.
+It needs no write access to `/data` and never resets the shared Sandbox or its logs.
+See the [demo API contract and scenarios](README.md#local-portfolio-demo-api).
 
 Phoenix uses its default SQLite backend under
 `PHOENIX_WORKING_DIR=/home/nonroot/.phoenix`. Mounting its existing non-root home

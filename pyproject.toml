@@ -42,6 +42,8 @@ strict = true
 # Keep imported types while reporting errors only in the explicit initial scope.
 follow_imports = "silent"
 files = [
+    "agent_service/main.py",
+    "agent_service/demo.py",
     "agent_service/agent/schemas.py",
     "agent_service/agent/state.py",
     "agent_service/tools/contracts.py",
