@@ -23,7 +23,7 @@ from agent_service.agent.schemas import (
     ToolCallDecision,
     ToolCallRecord,
 )
-from agent_service.observability import get_tracer
+from agent_service.observability import get_tracer, safe_tool_metadata
 from agent_service.tools.contracts import ToolResult
 from agent_service.tools.execute_api_request import (
     ExecuteApiRequestArgs,
@@ -223,11 +223,7 @@ async def dispatch_tool_call(
     }
     if session_id is not None:
         attributes[SpanAttributes.SESSION_ID] = session_id[:MAX_TRACE_VALUE_CHARS]
-    safe_arguments = {
-        key: value[:MAX_TRACE_VALUE_CHARS]
-        for key in ("method", "path", "request_id")
-        if isinstance((value := tool_call.arguments.get(key)), str)
-    }
+    safe_arguments = safe_tool_metadata(tool_call.arguments)
     if safe_arguments:
         attributes[ToolCallAttributes.TOOL_CALL_FUNCTION_ARGUMENTS_JSON] = json.dumps(
             safe_arguments, sort_keys=True, separators=(",", ":")
@@ -279,12 +275,11 @@ def _record_tool_result(span: Span, result: ToolResult[Any]) -> None:
     data = result.data
     if data is None:
         return
-    for field in ("method", "path", "request_id"):
-        value = getattr(data, field, None)
-        if value is not None:
-            span.set_attribute(
-                f"apilens.tool.{field}", str(value)[:MAX_TRACE_VALUE_CHARS]
-            )
+    metadata = safe_tool_metadata({
+        field: getattr(data, field, None) for field in ("method", "path", "request_id")
+    })
+    for field, value in metadata.items():
+        span.set_attribute(f"apilens.tool.{field}", value)
 
     if result.tool_name == "inspect_api_spec":
         span.set_attribute("apilens.tool.contract_found", True)

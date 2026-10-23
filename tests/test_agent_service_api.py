@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_service.agent import (
@@ -54,10 +55,47 @@ def test_debug_accepts_free_form_issue_and_returns_existing_diagnosis() -> None:
 
 
 def test_debug_rejects_empty_issue() -> None:
-    client, _ = client_with_providers()
+    client, providers = client_with_providers()
 
     for issue in ("", " \n\t "):
         assert client.post("/debug", json={"issue": issue}).status_code == 422
+    assert providers == []
+
+
+@pytest.mark.parametrize("length", [3999, 4000])
+def test_debug_accepts_issue_up_to_character_limit_without_truncation(
+    length: int,
+) -> None:
+    client, providers = client_with_providers()
+    issue = "é" * length
+
+    response = client.post("/debug", json={"issue": issue})
+
+    assert response.status_code == 200
+    assert providers[0].states[0].issue == issue
+
+
+def test_debug_length_limit_preserves_existing_whitespace_normalization() -> None:
+    client, providers = client_with_providers()
+    issue = "x" * 4000
+
+    response = client.post("/debug", json={"issue": f" \n{issue}\t "})
+
+    assert response.status_code == 200
+    assert providers[0].states[0].issue == issue
+
+
+def test_debug_rejects_over_limit_issue_before_provider_construction() -> None:
+    client, providers = client_with_providers()
+
+    response = client.post("/debug", json={"issue": "x" * 4001})
+
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", "issue"]
+    assert error["type"] == "string_too_long"
+    assert error["ctx"]["max_length"] == 4000
+    assert providers == []
 
 
 def test_debug_rejects_unexpected_fields() -> None:
@@ -97,6 +135,8 @@ def test_openapi_exposes_debug_request_and_diagnosis_response() -> None:
     assert request_schema["required"] == ["issue"]
     assert set(request_schema["properties"]) == {"issue"}
     assert request_schema["additionalProperties"] is False
+    assert request_schema["properties"]["issue"]["minLength"] == 1
+    assert request_schema["properties"]["issue"]["maxLength"] == 4000
     assert post["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/DebugDiagnosis"
     }
