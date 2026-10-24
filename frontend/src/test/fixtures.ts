@@ -1,5 +1,6 @@
 import { demoResponseSchema, stepSchema } from '../api';
 import type { DebugDiagnosis, InvestigationStep } from '../api';
+import type { SavedInvestigation } from '../history';
 
 // Test-only fixtures; the application never imports or returns these diagnoses.
 export function responseFixture(
@@ -33,4 +34,14 @@ export const observedSteps = [
 
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+export function savedFixture(index = 1, status: DebugDiagnosis['status'] = 'RESOLVED'): SavedInvestigation {
+  return {
+    id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    completedAt: new Date(Date.UTC(2026, 9, 24, 12, index)).toISOString(),
+    report: `Saved report ${index}`,
+    scenarioId: 'missing-inventory',
+    response: responseFixture(status, observedSteps),
+  };
 }

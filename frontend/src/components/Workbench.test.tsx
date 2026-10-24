@@ -80,13 +80,15 @@ describe('Copying actual text', () => {
     expect(within(first).getByText('Probe completed')).toBeVisible();
   });
 
-  it('renders exact and similar evidence references as text without speculative links', () => {
+  it('renders exact and similar evidence references as text without speculative links', async () => {
+    const user = userEvent.setup();
     const diagnosis = responseFixture('RESOLVED').diagnosis;
     diagnosis.evidence = [
       { source: 'api_execution', finding: 'Observed status', reference: observedSteps[0].request_id },
       { source: 'server_logs', finding: 'Follow-up evidence', reference: `request ${observedSteps[0].request_id}` },
     ];
     render(<Diagnosis diagnosis={diagnosis} />);
+    await user.click(screen.getByText('Expand recorded findings and references'));
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByText(observedSteps[0].request_id!)).toBeVisible();
   });

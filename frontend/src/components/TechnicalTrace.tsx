@@ -27,7 +27,7 @@ export function TechnicalTrace({ traceId }: { traceId: string | null }) {
 
   if (traceId === null) return null;
   const url = phoenixTraceUrl(traceId);
-  return <section className="technical-trace" aria-labelledby="trace-title">
+  return <section id="trace-section" tabIndex={-1} className="technical-trace" aria-labelledby="trace-title">
     <p className="eyebrow">DEEPER OBSERVABILITY</p><h2 id="trace-title">Explore the full investigation</h2>
     <p>The original Phoenix UI shows the technical trace for this run.</p>
     <div className="trace-actions">

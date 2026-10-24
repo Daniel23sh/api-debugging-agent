@@ -248,11 +248,38 @@ a custom report, acknowledge the live OpenAI request and possible cost, then cli
 **Start investigation**. Selecting a sample makes no request. Editing its report
 clears the scenario and switches to fresh default fixtures; selecting another
 sample replaces the report. Reports are locked while a request runs. The completed
-results arrive together: outcome first, measured execution summary, diagnosis
-evidence, chronological timeline, and Phoenix. Completion focuses the outcome;
-mobile also scrolls to it. Edits and new runs clear previous results. **Copy
+results arrive together. Report controls collapse and results use the full page
+width, with outcome and measured metrics side by side on wide screens. Completion
+focuses and positions the outcome below the section links. Evidence and timeline
+have expandable summaries with counts; missing evidence and suggested fixes stay
+visible. Section links reveal their destination and scroll smoothly, respecting
+reduced-motion preferences. The return link scrolls to the start of the results.
+**Edit report / run again**
+returns to the input with the report and cost acknowledgment retained, without
+making a request. Editing or starting another run clears the displayed results;
+completed snapshots remain in recent history. **Copy
 Diagnosis** copies the actual structured fields, including any uncertainty.
 Timeline technical details disclose tool names, errors, and copyable request IDs.
+The section bar stays in view on sufficiently large desktops only when it leaves
+most of the viewport free. Mobile uses normal page flow and a return link after
+the results. There are no independently scrolling result panes.
+
+**Recent investigations** automatically retains the last five completed responses
+in this browser profile using `localStorage` (no expiry). This includes unresolved
+and limit-reached diagnoses. Open an entry to view its saved report, diagnosis,
+timeline, metrics, and original trace link without sending a request. **Return to
+draft** restores the unfinished report, scenario, and current cost acknowledgment;
+viewing history never replaces them. Drafts and cost consent are not persisted.
+A reload starts at the normal input screen, with history available to open.
+
+History is not encrypted and is scoped to the frontend origin: protocol, hostname,
+and port. Use the same `http://127.0.0.1:5173` address to see the same records.
+**Clear history** opens a themed confirmation dialog before deleting only APILens's saved key; the displayed
+result and draft remain in memory. Browser data clearing can also remove records.
+Invalid stored data is ignored with a notice. If storage is blocked or full, results
+remain usable in memory and a notice explains that new records will not survive a
+reload. This is a one-tab local convenience; there is no cross-tab synchronization
+or cross-device history. Saved trace links may outlive the data available in Phoenix.
 
 When recording tracing is enabled, completed results offer **Explore Full Trace**
 on desktop viewports at least 1280 × 720, opening that investigation in a native
@@ -276,7 +303,7 @@ proxies to `http://127.0.0.1:8001`. There is no backend CORS change. TypeScript
 types and Zod runtime validation follow the Pydantic/OpenAPI contract, including
 diagnosis status rules. Model text is rendered as plain React text.
 
-This is a trusted local demo, with no automatic retries, persistence, or streaming.
+This is a trusted local demo, with browser-local history and no automatic retries or streaming.
 A network failure does not prove the server stopped processing a paid request.
 The production build is a compilation check; use the Vite development server for
 the documented local proxy workflow. See [Docker operations](DOCKER.md#portfolio-frontend)
@@ -370,8 +397,9 @@ Metrics come directly from execution hooks without querying Phoenix. Model names
 error messages and payloads are excluded; no dollar estimate is calculated.
 
 The frontend displays this completed JSON after an explicit live-request and cost
-acknowledgment. There is no streaming, stored history, reset endpoint, or additional
-backend service.
+acknowledgment. Completed responses may be retained in browser-local recent history;
+the backend retains no demo session history. There is no streaming, reset endpoint,
+or additional backend service.
 
 ### Verify without paid calls
 

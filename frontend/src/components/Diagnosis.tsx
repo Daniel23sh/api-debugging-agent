@@ -39,19 +39,19 @@ export function Outcome({ diagnosis }: { diagnosis: DebugDiagnosis }) {
 
 export function Diagnosis({ diagnosis }: { diagnosis: DebugDiagnosis }) {
   return <div className="diagnosis-content">
-    {diagnosis.evidence.length > 0 && <div className="finding-block">
-      <h3>Evidence <span className="count">{diagnosis.evidence.length}</span></h3>
-      <ul className="evidence-list">{diagnosis.evidence.map((item, index) => <li key={index}>
-        <span className="source-label">{sourceLabels[item.source]}</span>
-        <p>{item.finding}</p>
-        {item.reference && <p className="reference">Reference <code>{item.reference}</code></p>}
-      </li>)}</ul>
-    </div>}
     {diagnosis.missing_evidence.length > 0 && <div className="finding-block missing-evidence">
       <h3>Missing evidence</h3>
       <ul>{diagnosis.missing_evidence.map((item, index) => <li key={index}>{item}</li>)}</ul>
     </div>}
     {diagnosis.suggested_fix && <div className="finding-block suggested-fix"><h3>Suggested fix</h3><p>{diagnosis.suggested_fix}</p></div>}
+    {diagnosis.evidence.length > 0 && <details className="finding-block evidence-disclosure">
+      <summary id="evidence-summary"><h3>Evidence <span className="count">{diagnosis.evidence.length}</span></h3><span>Expand recorded findings and references</span></summary>
+      <ul className="evidence-list">{diagnosis.evidence.map((item, index) => <li key={index}>
+        <span className="source-label">{sourceLabels[item.source]}</span>
+        <p>{item.finding}</p>
+        {item.reference && <p className="reference">Reference <code>{item.reference}</code></p>}
+      </li>)}</ul>
+    </details>}
     <p className="diagnosis-footnote">An evidence-based diagnosis, not an applied fix. Review the findings before making changes.</p>
   </div>;
 }

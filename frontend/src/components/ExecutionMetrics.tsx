@@ -2,7 +2,7 @@ import type { ExecutionMetrics as Metrics } from '../api';
 
 export function ExecutionMetrics({ metrics }: { metrics: Metrics | null }) {
   const number = (value: number | null | undefined) => value == null ? 'Unavailable' : value.toLocaleString('en-US');
-  return <section className="metrics-panel" aria-labelledby="metrics-title">
+  return <section id="metrics-panel" tabIndex={-1} className="metrics-panel" aria-labelledby="metrics-title">
     <div className="section-heading"><h2 id="metrics-title">Execution at a glance</h2><span>Measured by this run</span></div>
     <dl className="metrics-grid">
       <div><dt>Agent duration</dt><dd>{metrics?.duration_seconds == null ? 'Unavailable' : `${metrics.duration_seconds.toFixed(2)} s`}</dd></div>
