@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { demoResponseSchema, investigate, issueLength, phoenixTraceUrl, stepSchema } from './api';
+import { demoResponseSchema, investigate, issueLength, metricsSchema, phoenixTraceUrl, stepSchema } from './api';
 import { jsonResponse, responseFixture } from './test/fixtures';
 
 describe('Demo API client', () => {
@@ -51,6 +51,7 @@ describe('Demo API client', () => {
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', tool_name: 'PRIVATE' }] },
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', route: '/products/PRIVATE' }] },
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', request_id: 'PRIVATE' }] },
+    { ...responseFixture(), steps: [{ kind: 'tool_attempt', request_id: '6c0df0f0-0a17-47f8-858e-8a92f3762c65\n' }] },
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', status_code: 600 }] },
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', status_code: true }] },
     { ...responseFixture(), steps: [{ kind: 'tool_attempt', reasoning: 'PRIVATE' }] },
@@ -74,6 +75,19 @@ describe('Demo API client', () => {
     expect(response.diagnosis.root_cause).toBeNull();
     expect(response.diagnosis.evidence).toEqual([]);
     expect(response.trace_id).toBeNull();
+    expect(response.metrics).toBeNull();
+  });
+
+  it.each([
+    { duration_seconds: -1 }, { duration_seconds: Infinity },
+    { tool_attempt_count: true }, { model_request_count: -1 },
+    { input_tokens: 'private' }, { output_tokens: 1.5 }, { total_tokens: -1 },
+    { reasoning: 'private' },
+  ])('rejects invalid or private metrics %#', (invalid) => {
+    expect(metricsSchema.safeParse({
+      duration_seconds: 0, tool_attempt_count: 0, model_request_count: null,
+      input_tokens: null, output_tokens: null, total_tokens: null, ...invalid,
+    }).success).toBe(false);
   });
 
   it('builds an exact trace URL only on the trusted local Phoenix origin', async () => {

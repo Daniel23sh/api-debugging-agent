@@ -26,7 +26,7 @@ describe('APILens workspace', () => {
     expect(costCheckbox()).not.toBeChecked();
     expect(screen.getByText('Every step has a source')).toBeVisible();
     expect(screen.queryByLabelText('Recorded investigation steps')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open in Phoenix/ })).not.toBeInTheDocument();
     expect(document.querySelector('iframe')).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -204,16 +204,14 @@ describe('APILens workspace', () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ...responseFixture(), trace_id: traceId }));
     const user = await prepare();
     await user.click(action());
-    const link = await screen.findByRole('link', { name: /View technical trace in Phoenix/ });
+    const link = await screen.findByRole('link', { name: /Open in Phoenix/ });
     expect(link).toHaveAttribute('href', `http://127.0.0.1:6006/redirects/traces/${traceId}`);
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText(/export may still be pending or unavailable/)).toBeVisible();
     expect(document.querySelector('iframe')).toBeNull();
     expect(fetch).toHaveBeenCalledOnce();
-    await user.tab(); // Submitted report disclosure.
-    await user.tab();
-    expect(link).toHaveFocus();
+    expect(screen.getByRole('region', { name: 'Investigation outcome' })).toHaveFocus();
   });
 
   it('hides trace navigation when tracing is absent', async () => {
@@ -221,7 +219,7 @@ describe('APILens workspace', () => {
     const user = await prepare();
     await user.click(action());
     expect(await screen.findByText('INCONCLUSIVE', { selector: 'code' })).toBeVisible();
-    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open in Phoenix/ })).not.toBeInTheDocument();
   });
 
   it('clears a previous trace on editing, loading, and failure', async () => {
@@ -229,20 +227,20 @@ describe('APILens workspace', () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
     const user = await prepare();
     await user.click(action());
-    await screen.findByRole('link', { name: /technical trace/ });
+    await screen.findByRole('link', { name: /Open in Phoenix/ });
     await user.type(reportInput(), ' Edited.');
-    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open in Phoenix/ })).not.toBeInTheDocument();
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
     await user.click(action());
-    await screen.findByRole('link', { name: /technical trace/ });
+    await screen.findByRole('link', { name: /Open in Phoenix/ });
 
     let finish!: (response: Response) => void;
     vi.mocked(fetch).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     await user.click(action());
-    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open in Phoenix/ })).not.toBeInTheDocument();
     await act(async () => { finish(jsonResponse({ ...response, detail: 'PRIVATE' }, 502)); });
     expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 502');
-    expect(screen.queryByRole('link', { name: /technical trace/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open in Phoenix/ })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -286,5 +284,32 @@ describe('APILens workspace', () => {
     expect(costCheckbox()).toBeChecked();
     expect(action()).toBeEnabled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('orders outcome, measured metrics, evidence, timeline, and Phoenix without repeating the cause', async () => {
+    const response = { ...responseFixture('RESOLVED', observedSteps), trace_id: '0123456789abcdef0123456789abcdef', metrics: {
+      duration_seconds: 2.5, tool_attempt_count: 4, model_request_count: 2,
+      input_tokens: 10, output_tokens: 5, total_tokens: 15,
+    } };
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(response));
+    const user = await prepare();
+    await user.click(action());
+    await screen.findByRole('heading', { name: 'Root cause identified' });
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
+    expect(headings).toEqual(['What’s not working?', 'Investigation outcome', 'Execution at a glance', 'Diagnosis & evidence', 'Follow the evidence', 'Explore the full investigation']);
+    expect(screen.getAllByText('The inventory row is absent.')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Investigation outcome' })).toHaveFocus();
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('focuses and scrolls to the completed outcome on mobile', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('max-width'), addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(responseFixture('NO_BUG_FOUND')));
+    const user = await prepare();
+    await user.click(action());
+    expect(await screen.findByRole('heading', { name: 'No bug found' })).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Investigation outcome' })).toHaveFocus();
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: 'start', behavior: 'auto' });
+    expect(screen.getByText('NO_BUG_FOUND').closest('.diagnosis-status')).toHaveClass('neutral');
   });
 });

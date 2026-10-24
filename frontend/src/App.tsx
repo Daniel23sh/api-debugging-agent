@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { investigate, issueLength, MAX_ISSUE_CHARS } from './api';
 import type { DemoResponse, ScenarioId } from './api';
-import { Diagnosis } from './components/Diagnosis';
+import { Diagnosis, Outcome } from './components/Diagnosis';
+import { ExecutionMetrics } from './components/ExecutionMetrics';
 import { Timeline } from './components/Timeline';
 import { TechnicalTrace } from './components/TechnicalTrace';
 import { scenarios } from './scenarios';
@@ -18,10 +19,19 @@ export default function App() {
   const [acknowledged, setAcknowledged] = useState(false);
   const [run, setRun] = useState<RunState>({ status: 'idle' });
   const inFlight = useRef(false);
+  const outcome = useRef<HTMLElement>(null);
   const loading = run.status === 'loading';
   const length = issueLength(issue);
   const overLimit = length > MAX_ISSUE_CHARS;
   const selectedScenario = scenarios.find((scenario) => scenario.id === scenarioId);
+
+  useEffect(() => {
+    if (run.status !== 'success') return;
+    outcome.current?.focus({ preventScroll: true });
+    if (window.matchMedia('(max-width: 850px)').matches) {
+      outcome.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    }
+  }, [run]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -68,7 +78,7 @@ export default function App() {
                 key={scenario.id} type="button" className="scenario-button"
                 aria-pressed={scenarioId === scenario.id}
                 onClick={() => { setIssue(scenario.issue); setScenarioId(scenario.id); setRun({ status: 'idle' }); }}
-              ><span className="scenario-index">0{index + 1}</span><span><strong>{scenario.title}</strong><code>{scenario.route}</code></span><span className="selection-dot" aria-hidden="true" /></button>)}</div>
+              ><span className="scenario-index">0{index + 1}</span><span><strong>{scenario.title}</strong><span className="scenario-category">{scenario.category}</span><code>{scenario.route}</code></span><span className="selection-dot" aria-hidden="true" /></button>)}</div>
             </fieldset>
             <div className="report-label"><label htmlFor="issue">Bug report <span aria-hidden="true">*</span></label><span className="mode-label">{selectedScenario ? 'Sample scenario' : 'Free-form'}</span></div>
             <textarea
@@ -91,12 +101,22 @@ export default function App() {
           {run.status === 'error' && <div className="api-error" role="alert"><h3>Investigation unavailable</h3><p>{run.message}</p><p className="error-footnote">No automatic retries. A request may already have started; submitting again may incur another charge.</p></div>}
         </section>
 
-        <p className="sr-only" role="status">{loading ? 'Investigation in progress. The report is locked until completion.' : run.status === 'success' ? 'Investigation complete. Timeline and diagnosis are available.' : ''}</p>
+        <p className="sr-only" role="status">{loading ? 'Investigation in progress. The report is locked until completion.' : run.status === 'success' ? `Investigation complete: ${run.response.diagnosis.status}. Outcome, metrics, evidence, and timeline are available.` : ''}</p>
         <div className="results-column" aria-busy={loading}>
+          <section ref={outcome} tabIndex={-1} className="panel outcome-panel" aria-labelledby="outcome-title">
+            <div className="panel-header"><div><p className="eyebrow">02 / THE OUTCOME</p><h2 id="outcome-title">Investigation outcome</h2></div><span className="panel-caption">{run.status === 'success' ? 'Structured result' : 'Awaiting investigation'}</span></div>
+            {run.status === 'success' ? <Outcome diagnosis={run.response.diagnosis} /> : <div className="diagnosis-empty"><span className="document-mark" aria-hidden="true">≡</span><div><h3>{loading ? 'Investigating your report' : 'Clarity comes from evidence.'}</h3><p>{loading ? 'The outcome appears when the bounded investigation finishes.' : 'The outcome, supporting evidence, and suggested fix appear here after the investigation.'}</p></div></div>}
+          </section>
+          {run.status === 'success' && <>
+            <ExecutionMetrics metrics={run.response.metrics} />
+            <section className="panel diagnosis-panel" aria-labelledby="diagnosis-title">
+              <div className="panel-header"><div><p className="eyebrow">03 / THE FINDINGS</p><h2 id="diagnosis-title">Diagnosis &amp; evidence</h2></div><span className="panel-caption">Observed support</span></div>
+              <Diagnosis diagnosis={run.response.diagnosis} />
+            </section>
+          </>}
           {run.status !== 'idle' && <details className="submitted-report"><summary>Submitted report</summary><p>{run.report}</p></details>}
-          {run.status === 'success' && <TechnicalTrace traceId={run.response.trace_id} />}
           <section className="panel" aria-labelledby="timeline-title">
-            <div className="panel-header"><div><p className="eyebrow">02 / THE INVESTIGATION</p><h2 id="timeline-title">Follow the evidence</h2></div><span className="panel-caption">{run.status === 'success' ? `${run.response.steps.length} recorded steps` : 'Execution timeline'}</span></div>
+            <div className="panel-header"><div><p className="eyebrow">04 / THE INVESTIGATION</p><h2 id="timeline-title">Follow the evidence</h2></div><span className="panel-caption">{run.status === 'success' ? `${run.response.steps.length} recorded steps` : 'Execution timeline'}</span></div>
             {run.status === 'success' ? <Timeline steps={run.response.steps} /> : <div className="empty-state">
               <div className={`empty-orbit ${loading ? 'is-loading' : ''}`} aria-hidden="true"><span /><span /><span /></div>
               <h3>{loading ? 'Investigation in progress' : run.status === 'error' ? 'No results received' : 'Every step has a source'}</h3>
@@ -104,11 +124,7 @@ export default function App() {
               {!loading && run.status === 'idle' && <span className="empty-footnote">No scripted sequence. No invented progress.</span>}
             </div>}
           </section>
-
-          <section className="panel diagnosis-panel" aria-labelledby="diagnosis-title">
-            <div className="panel-header"><div><p className="eyebrow">03 / THE FINDINGS</p><h2 id="diagnosis-title">The diagnosis</h2></div><span className="panel-caption">{run.status === 'success' ? 'Structured result' : 'Awaiting investigation'}</span></div>
-            {run.status === 'success' ? <Diagnosis diagnosis={run.response.diagnosis} /> : <div className="diagnosis-empty"><span className="document-mark" aria-hidden="true">≡</span><div><h3>Clarity comes from evidence.</h3><p>The diagnosis, supporting evidence, and suggested fix appear here after the investigation.</p></div></div>}
-          </section>
+          {run.status === 'success' && <TechnicalTrace key={run.response.trace_id} traceId={run.response.trace_id} />}
         </div>
       </div>
 

@@ -89,10 +89,12 @@ address. Phoenix telemetry and external resource fetching are disabled. Existing
 trace privacy filters remain in effect; credentials are not sent to Phoenix.
 
 Completed frontend investigations can open their exact Phoenix trace on port 6006.
+The desktop **Explore Full Trace** dialog embeds Phoenix only after a click;
+**Open in Phoenix** remains available on desktop and mobile.
 The recording trace ID can precede ingestion; reopen the same link if it is not yet
 found. No exporter flush or extra investigation is needed. See the
 [frontend workflow](README.md#portfolio-frontend) for tracing availability
-and the direct-link presentation choice.
+and the desktop viewport requirements.
 
 ## Offline smoke checks
 

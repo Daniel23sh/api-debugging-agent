@@ -248,17 +248,26 @@ a custom report, acknowledge the live OpenAI request and possible cost, then cli
 **Start investigation**. Selecting a sample makes no request. Editing its report
 clears the scenario and switches to fresh default fixtures; selecting another
 sample replaces the report. Reports are locked while a request runs. The completed
-timeline and diagnosis arrive together; edits and new runs clear previous results.
+results arrive together: outcome first, measured execution summary, diagnosis
+evidence, chronological timeline, and Phoenix. Completion focuses the outcome;
+mobile also scrolls to it. Edits and new runs clear previous results. **Copy
+Diagnosis** copies the actual structured fields, including any uncertainty.
+Timeline technical details disclose tool names, errors, and copyable request IDs.
 
-When recording tracing is enabled, completed results also offer **View technical
-trace in Phoenix**, opening that investigation in a new tab. Phoenix must be
+When recording tracing is enabled, completed results offer **Explore Full Trace**
+on desktop viewports at least 1280 × 720, opening that investigation in a native
+modal dialog with the original Phoenix UI. Close or Escape from the viewer toolbar
+restores focus; Phoenix handles Escape internally when focus is inside its
+cross-origin frame. The visible Close action remains available. The
+page behind the dialog is inert. **Open in Phoenix** is always available as an
+external fallback. Smaller screens use that link without an iframe. Phoenix must be
 running on [local port 6006](http://127.0.0.1:6006). Export is asynchronous: a trace
 ID does not guarantee successful ingestion. If Phoenix is unavailable or the trace
 is not found yet, reopen the same link later; another investigation is unnecessary.
-The action is hidden when no recording trace ID exists. Phoenix is never loaded
-automatically. Local verification with Phoenix 20.23.0 found no framing restrictions
-and a working desktop iframe, but its trace view was clipped at mobile width, so
-the demo uses direct navigation rather than an embedded viewer.
+Trace actions are hidden when no recording trace ID exists. The iframe loads only
+when explicitly opened and unloads on close or resize below the desktop threshold.
+Its load event is not evidence of ingestion. Phoenix 20.23.0 permits framing in the
+local runtime; the desktop viewer avoids its previously verified mobile clipping.
 
 Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
 produce an actionable error. Never put a key in frontend files or `VITE_*`
@@ -277,7 +286,7 @@ for startup and connection troubleshooting.
 
 `POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
 `/debug`, returning
-`{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[], "trace_id": string | null }`
+`{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[], "trace_id": string | null, "metrics": DemoExecutionMetrics | null }`
 after completion. The optional one-page client consumes this endpoint.
 Keep the service on localhost, as in Compose.
 **This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
@@ -346,6 +355,19 @@ disabled/nonrecording. It is correlation metadata, not authorization or proof of
 export. The frontend validates the ID and constructs only the trusted local URL
 `http://127.0.0.1:6006/redirects/traces/{trace_id}`. Phoenix 20.23.0 resolves the
 project itself; the demo performs no project lookup and exposes no trace payloads.
+
+The memory-only recorder also returns `metrics` with these definitions. A missing
+metrics object (for example, an older service) is displayed as unavailable.
+
+| Field | Measurement |
+| --- | --- |
+| `duration_seconds` | Monotonic elapsed time between agent-loop start/finish hooks, including decisions, tool executions and retries; excludes fixture preparation, provider construction, final-diagnosis span creation, export, and browser/network time. Null before lifecycle timing is available. |
+| `tool_attempt_count` | Actual tool-start events, including failed attempts and retries; excludes rejected actions. Zero means no tool attempts. |
+| `model_request_count` | Observed model-start hooks, including corrective requests, failures and unfinished calls; never inferred from decisions. Null when no hooks were observed, since scripted/uninstrumented providers may make no usage events. |
+| `input_tokens`, `output_tokens`, `total_tokens` | Each field is summed only when **every** observed model request has a valid, nonnegative integer measurement for it. Missing, unfinished, or invalid usage makes that field null; no inferred totals or partial sums. An observed zero remains zero. |
+
+Metrics come directly from execution hooks without querying Phoenix. Model names,
+error messages and payloads are excluded; no dollar estimate is calculated.
 
 The frontend displays this completed JSON after an explicit live-request and cost
 acknowledgment. There is no streaming, stored history, reset endpoint, or additional

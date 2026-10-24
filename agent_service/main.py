@@ -203,7 +203,8 @@ def create_app(
                 ),
             )
         return DemoDebugResponse(
-            diagnosis=diagnosis, steps=recorder.steps, trace_id=recorder.trace_id
+            diagnosis=diagnosis, steps=recorder.steps, trace_id=recorder.trace_id,
+            metrics=recorder.metrics,
         )
 
     return app

@@ -222,3 +222,44 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Completed results keep the outcome ahead of evidence and deeper diagnostics. */
+.scenario-category { display: block; color: var(--accent); font-size: 11px; line-height: 1.6; margin-top: 3px; }
+.secondary-button { background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 6px; min-height: 44px; padding: 9px 13px; font-size: 13px; }
+.secondary-button:hover { border-color: var(--accent); }
+.copy-action { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.copy-feedback { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.outcome-panel { border-top: 2px solid var(--accent); scroll-margin-top: 20px; }
+.outcome-content .diagnosis-status { padding-bottom: 16px; }
+.outcome-content .finding-block { padding: 16px 0; }
+.outcome-content .copy-action { margin-top: 8px; }
+.metrics-panel { padding: 22px 25px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.section-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.section-heading h2 { font-size: 16px; }
+.section-heading > span { color: var(--muted); font-size: 12px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px 12px; margin: 22px 0 16px; }
+.metrics-grid dt { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.metrics-grid dd { margin: 8px 0 0; font: 18px/1.4 var(--mono); overflow-wrap: anywhere; }
+.metrics-note, .metric-definitions { font-size: 12px; line-height: 1.8; color: var(--muted); }
+.metric-definitions { margin-top: 10px; }
+.metric-definitions summary, .step-details summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
+.step-description { color: var(--muted); font-size: 13px; line-height: 1.7; margin-top: 7px; }
+.step-details { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.step-details > p { margin-top: 8px; overflow-wrap: anywhere; }
+.request-id .copy-action { margin-top: 8px; display: flex; }
+.technical-trace { padding: 24px 25px; }
+.technical-trace h2 { font-size: 18px; margin: 10px 0; }
+.technical-trace p { line-height: 1.8; }
+.trace-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 10px; }
+.trace-dialog { width: calc(100vw - 32px); max-width: none; height: calc(100dvh - 32px); max-height: none; padding: 0; margin: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; }
+.trace-dialog::backdrop { background: rgb(0 0 0 / 80%); }
+.trace-dialog[open] { display: flex; flex-direction: column; }
+.viewer-header { padding: 16px 20px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--border); }
+.viewer-header > div { flex: 1; }
+.viewer-header h2 { font-size: 18px; margin: 0 0 5px; }
+.viewer-header p { max-width: 700px; color: var(--muted); font-size: 12px; }
+.viewer-header a { white-space: nowrap; }
+.trace-dialog iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: white; }
+body:has(.trace-dialog[open]) { overflow: hidden; }
+@media (max-width: 1100px) { .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .metrics-panel, .technical-trace { padding: 20px 17px; } .metrics-grid dd { font-size: 17px; } }
