@@ -48,7 +48,7 @@ export const stepSchema = z.strictObject({
   ]).nullable().default(null),
   success: z.boolean().nullable().default(null),
   status_code: z.number().int().min(100).max(599).nullable().default(null),
-  request_id: z.string().regex(
+  request_id: z.string().length(36).regex(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   ).nullable().default(null),
   error_category: z.enum([
@@ -61,15 +61,34 @@ export const stepSchema = z.strictObject({
   retry: z.boolean().default(false),
 });
 
+export const traceIdSchema = z.string().length(32).regex(/^[0-9a-f]{32}$/)
+  .refine((value) => value !== '0'.repeat(32));
+
+export const phoenixTraceUrl = (traceId: string) =>
+  `http://127.0.0.1:6006/redirects/traces/${traceIdSchema.parse(traceId)}`;
+
+const count = z.number().int().nonnegative();
+export const metricsSchema = z.strictObject({
+  duration_seconds: z.number().nonnegative().nullable(),
+  tool_attempt_count: count,
+  model_request_count: count.nullable(),
+  input_tokens: count.nullable(),
+  output_tokens: count.nullable(),
+  total_tokens: count.nullable(),
+});
+
 export const demoResponseSchema = z.strictObject({
   diagnosis: diagnosisSchema,
   steps: z.array(stepSchema),
+  trace_id: traceIdSchema.nullable().default(null),
+  metrics: metricsSchema.nullable().default(null),
 });
 
 export type ScenarioId = z.infer<typeof scenarioIdSchema>;
 export type DebugDiagnosis = z.infer<typeof diagnosisSchema>;
 export type InvestigationStep = z.infer<typeof stepSchema>;
 export type DemoResponse = z.infer<typeof demoResponseSchema>;
+export type ExecutionMetrics = z.infer<typeof metricsSchema>;
 
 // Python counts Unicode code points, while HTML maxLength counts UTF-16 units.
 export const issueLength = (issue: string) => Array.from(issue.trim()).length;

@@ -202,7 +202,10 @@ def create_app(
                     diagnosis.missing_evidence or ["Investigation limit reached"]
                 ),
             )
-        return DemoDebugResponse(diagnosis=diagnosis, steps=recorder.steps)
+        return DemoDebugResponse(
+            diagnosis=diagnosis, steps=recorder.steps, trace_id=recorder.trace_id,
+            metrics=recorder.metrics,
+        )
 
     return app
 

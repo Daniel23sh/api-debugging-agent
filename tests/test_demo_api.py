@@ -12,6 +12,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import (
+    INVALID_SPAN_CONTEXT,
+    NonRecordingSpan,
+    SpanContext,
+    use_span,
+)
 from pydantic import ValidationError
 
 from agent_service.agent.loop import DecisionProviderError, run_agent
@@ -32,7 +38,7 @@ from agent_service.demo import (
     demo_sandbox,
 )
 from agent_service.main import DemoDebugRequest, create_app
-from agent_service.observability import configure_tracing
+from agent_service.observability import configure_tracing, get_tracer
 from sandbox_api.db import Database
 from sandbox_api.main import create_app as create_sandbox_app
 
@@ -110,6 +116,12 @@ def test_demo_openapi_is_additive_and_typed():
     assert response["properties"]["diagnosis"] == {"$ref": "#/components/schemas/DebugDiagnosis"}
     assert response["properties"]["steps"]["items"] == {"$ref": "#/components/schemas/InvestigationStep"}
     assert response["additionalProperties"] is False
+    assert "trace_id" not in response["required"]
+    assert response["properties"]["trace_id"]["anyOf"] == [
+        {"type": "string", "minLength": 32, "maxLength": 32, "pattern": "^[0-9a-f]{32}$"},
+        {"type": "null"},
+    ]
+    assert "trace_id" not in schemas["DebugDiagnosis"]["properties"]
 
 
 @pytest.mark.parametrize("values", [
@@ -131,6 +143,26 @@ def test_response_step_schema_rejects_unapproved_values(values):
 def test_response_requires_a_valid_existing_diagnosis():
     with pytest.raises(ValidationError):
         DemoDebugResponse.model_validate({"diagnosis": {"status": "RESOLVED"}, "steps": []})
+
+
+@pytest.mark.parametrize("trace_id", [
+    "0" * 32, "A" * 32, "a" * 31, "a" * 33, "a" * 32 + "\n",
+    REQUEST_ID, PRIVATE, "http://127.0.0.1:6006/", 123,
+])
+def test_demo_response_rejects_invalid_trace_ids(trace_id):
+    with pytest.raises(ValidationError):
+        DemoDebugResponse(diagnosis=final().diagnosis, steps=[], trace_id=trace_id)
+
+
+@pytest.mark.parametrize("context", [
+    INVALID_SPAN_CONTEXT,
+    SpanContext(trace_id=1, span_id=1, is_remote=False),
+])
+def test_recorder_ignores_invalid_or_nonrecording_span_context(context):
+    recorder = DemoRecorder()
+    with use_span(NonRecordingSpan(context)):
+        recorder.start(DebugSessionState(session_id=PRIVATE, issue=PRIVATE), AgentLimits())
+    assert recorder.trace_id is None
 
 
 def test_evidence_only_limit_from_injected_provider_remains_valid_and_private():
@@ -166,6 +198,7 @@ def test_early_final_is_real_and_has_empty_timeline(scenario, temporary_paths):
     result = DemoDebugResponse.model_validate(response.json())
     assert result.diagnosis == final().diagnosis
     assert result.steps == []
+    assert response.json()["trace_id"] is None
     assert provider.states[0].issue == "A vague report"
     assert provider.states[0].step_count == provider.states[0].tool_call_count == 0
     assert provider.states[0].observations == []
@@ -597,5 +630,42 @@ def test_demo_uses_existing_trace_hierarchy_without_private_fields():
     spans = exporter.get_finished_spans()
     assert [span.name for span in spans] == ["agent_decision", "execute_api_request", "agent_decision", "final_diagnosis", "DebugSession"]
     session = spans[-1]
+    result = DemoDebugResponse.model_validate(response.json())
+    assert result.trace_id == f"{session.context.trace_id:032x}"
+    assert result.trace_id != "0" * 32
+    assert result.diagnosis == final().diagnosis
+    assert len(result.steps) == 1
+    assert result.steps[0].success is True and result.steps[0].status_code == 200
     assert all(span.parent.span_id == session.context.span_id for span in spans[:-1])
     assert PRIVATE not in str([span.attributes for span in spans])
+
+
+@pytest.mark.asyncio
+async def test_concurrent_demo_trace_ids_match_separate_exported_roots():
+    exporter = InMemorySpanExporter()
+    tracer_provider = configure_tracing(span_exporter=exporter)
+
+    class YieldingProvider:
+        async def next_decision(self, state):
+            await asyncio.sleep(0)
+            return final()
+
+    app = create_app(YieldingProvider)
+    app.state.tracer = get_tracer(tracer_provider)
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://agent"
+        ) as client:
+            responses = await asyncio.gather(*[
+                client.post("/demo/debug", json={"issue": "offline report"})
+                for _ in range(3)
+            ])
+            regular = await client.post("/debug", json={"issue": "offline report"})
+        assert regular.json() == final().diagnosis.model_dump(mode="json")
+        roots = [span for span in exporter.get_finished_spans() if span.name == "DebugSession"]
+        trace_ids = {response.json()["trace_id"] for response in responses}
+        assert len(trace_ids) == 3 and all(response.status_code == 200 for response in responses)
+        assert trace_ids == {f"{span.context.trace_id:032x}" for span in roots[:3]}
+        assert all(span.parent is None for span in roots)
+    finally:
+        tracer_provider.shutdown()

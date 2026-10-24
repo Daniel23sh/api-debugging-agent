@@ -248,7 +248,53 @@ a custom report, acknowledge the live OpenAI request and possible cost, then cli
 **Start investigation**. Selecting a sample makes no request. Editing its report
 clears the scenario and switches to fresh default fixtures; selecting another
 sample replaces the report. Reports are locked while a request runs. The completed
-timeline and diagnosis arrive together; edits and new runs clear previous results.
+results arrive together. Report controls collapse and results use the full page
+width, with outcome and measured metrics side by side on wide screens. Completion
+focuses and positions the outcome below the section links. Evidence and timeline
+have expandable summaries with counts; missing evidence and suggested fixes stay
+visible. Section links reveal their destination and scroll smoothly, respecting
+reduced-motion preferences. The return link scrolls to the start of the results.
+**Edit report / run again**
+returns to the input with the report and cost acknowledgment retained, without
+making a request. Editing or starting another run clears the displayed results;
+completed snapshots remain in recent history. **Copy
+Diagnosis** copies the actual structured fields, including any uncertainty.
+Timeline technical details disclose tool names, errors, and copyable request IDs.
+The section bar stays in view on sufficiently large desktops only when it leaves
+most of the viewport free. Mobile uses normal page flow and a return link after
+the results. There are no independently scrolling result panes.
+
+**Recent investigations** automatically retains the last five completed responses
+in this browser profile using `localStorage` (no expiry). This includes unresolved
+and limit-reached diagnoses. Open an entry to view its saved report, diagnosis,
+timeline, metrics, and original trace link without sending a request. **Return to
+draft** restores the unfinished report, scenario, and current cost acknowledgment;
+viewing history never replaces them. Drafts and cost consent are not persisted.
+A reload starts at the normal input screen, with history available to open.
+
+History is not encrypted and is scoped to the frontend origin: protocol, hostname,
+and port. Use the same `http://127.0.0.1:5173` address to see the same records.
+**Clear history** opens a themed confirmation dialog before deleting only APILens's saved key; the displayed
+result and draft remain in memory. Browser data clearing can also remove records.
+Invalid stored data is ignored with a notice. If storage is blocked or full, results
+remain usable in memory and a notice explains that new records will not survive a
+reload. This is a one-tab local convenience; there is no cross-tab synchronization
+or cross-device history. Saved trace links may outlive the data available in Phoenix.
+
+When recording tracing is enabled, completed results offer **Explore Full Trace**
+on desktop viewports at least 1280 × 720, opening that investigation in a native
+modal dialog with the original Phoenix UI. Close or Escape from the viewer toolbar
+restores focus; Phoenix handles Escape internally when focus is inside its
+cross-origin frame. The visible Close action remains available. The
+page behind the dialog is inert. **Open in Phoenix** is always available as an
+external fallback. Smaller screens use that link without an iframe. Phoenix must be
+running on [local port 6006](http://127.0.0.1:6006). Export is asynchronous: a trace
+ID does not guarantee successful ingestion. If Phoenix is unavailable or the trace
+is not found yet, reopen the same link later; another investigation is unnecessary.
+Trace actions are hidden when no recording trace ID exists. The iframe loads only
+when explicitly opened and unloads on close or resize below the desktop threshold.
+Its load event is not evidence of ingestion. Phoenix 20.23.0 permits framing in the
+local runtime; the desktop viewer avoids its previously verified mobile clipping.
 
 Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
 produce an actionable error. Never put a key in frontend files or `VITE_*`
@@ -257,7 +303,7 @@ proxies to `http://127.0.0.1:8001`. There is no backend CORS change. TypeScript
 types and Zod runtime validation follow the Pydantic/OpenAPI contract, including
 diagnosis status rules. Model text is rendered as plain React text.
 
-This is a trusted local demo, with no automatic retries, persistence, or streaming.
+This is a trusted local demo, with browser-local history and no automatic retries or streaming.
 A network failure does not prove the server stopped processing a paid request.
 The production build is a compilation check; use the Vite development server for
 the documented local proxy workflow. See [Docker operations](DOCKER.md#portfolio-frontend)
@@ -266,7 +312,8 @@ for startup and connection troubleshooting.
 ### Local portfolio demo API
 
 `POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
-`/debug`, returning `{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[] }`
+`/debug`, returning
+`{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[], "trace_id": string | null, "metrics": DemoExecutionMetrics | null }`
 after completion. The optional one-page client consumes this endpoint.
 Keep the service on localhost, as in Compose.
 **This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
@@ -329,9 +376,30 @@ a generic HTTP 502; invalid requests return HTTP 422 before model construction.
 Typed tool failures and limits remain recorded outcomes. `/debug` continues to
 return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
 
+`trace_id` is the active recording `DebugSession` root's OpenTelemetry trace ID:
+32 lowercase hexadecimal characters, never all zero, or null when tracing is
+disabled/nonrecording. It is correlation metadata, not authorization or proof of
+export. The frontend validates the ID and constructs only the trusted local URL
+`http://127.0.0.1:6006/redirects/traces/{trace_id}`. Phoenix 20.23.0 resolves the
+project itself; the demo performs no project lookup and exposes no trace payloads.
+
+The memory-only recorder also returns `metrics` with these definitions. A missing
+metrics object (for example, an older service) is displayed as unavailable.
+
+| Field | Measurement |
+| --- | --- |
+| `duration_seconds` | Monotonic elapsed time between agent-loop start/finish hooks, including decisions, tool executions and retries; excludes fixture preparation, provider construction, final-diagnosis span creation, export, and browser/network time. Null before lifecycle timing is available. |
+| `tool_attempt_count` | Actual tool-start events, including failed attempts and retries; excludes rejected actions. Zero means no tool attempts. |
+| `model_request_count` | Observed model-start hooks, including corrective requests, failures and unfinished calls; never inferred from decisions. Null when no hooks were observed, since scripted/uninstrumented providers may make no usage events. |
+| `input_tokens`, `output_tokens`, `total_tokens` | Each field is summed only when **every** observed model request has a valid, nonnegative integer measurement for it. Missing, unfinished, or invalid usage makes that field null; no inferred totals or partial sums. An observed zero remains zero. |
+
+Metrics come directly from execution hooks without querying Phoenix. Model names,
+error messages and payloads are excluded; no dollar estimate is calculated.
+
 The frontend displays this completed JSON after an explicit live-request and cost
-acknowledgment. There is no streaming, stored history, reset endpoint, or additional
-backend service.
+acknowledgment. Completed responses may be retained in browser-local recent history;
+the backend retains no demo session history. There is no streaming, reset endpoint,
+or additional backend service.
 
 ### Verify without paid calls
 

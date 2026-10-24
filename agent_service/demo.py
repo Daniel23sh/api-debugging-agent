@@ -5,11 +5,20 @@ from contextlib import asynccontextmanager
 from enum import StrEnum
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import monotonic
 from typing import Literal
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from opentelemetry.trace import get_current_span
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+)
 
 from agent_service.agent.dispatch import DispatchErrorType
 from agent_service.agent.loop import LoopFeedbackType
@@ -65,11 +74,35 @@ class InvestigationStep(BaseModel):
     retry: bool = False
 
 
+class DemoExecutionMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    tool_attempt_count: int = Field(default=0, ge=0)
+    model_request_count: int | None = Field(default=None, ge=0)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+
+
 class DemoDebugResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     diagnosis: DebugDiagnosis
     steps: list[InvestigationStep]
+    metrics: DemoExecutionMetrics | None = None
+    trace_id: str | None = Field(
+        default=None, strict=True, min_length=32, max_length=32,
+        pattern=r"^[0-9a-f]{32}$",
+        description="Recording DebugSession trace ID; does not confirm Phoenix ingestion.",
+    )
+
+    @field_validator("trace_id")
+    @classmethod
+    def validate_trace_id(cls, value: str | None) -> str | None:
+        if value == "0" * 32:
+            raise ValueError("trace ID must be nonzero")
+        return value
 
 
 def _safe_step(
@@ -98,11 +131,21 @@ class DemoRecorder:
 
     def __init__(self) -> None:
         self.steps: list[InvestigationStep] = []
+        self.trace_id: str | None = None
         self.provider_failed = False
         self._selected: InvestigationStep | None = None
+        self.metrics = DemoExecutionMetrics()
+        self._started_at: float | None = None
+        self._model_usage: dict[str, dict[str, int | None] | None] = {}
 
     def start(self, state: DebugSessionState, limits: AgentLimits) -> None:
-        pass
+        self._started_at = monotonic()
+        span = get_current_span()
+        context = span.get_span_context()
+        self.trace_id = (
+            f"{context.trace_id:032x}"
+            if span.is_recording() and context.is_valid else None
+        )
 
     def decision_started(self, state: DebugSessionState) -> None:
         self._selected = None
@@ -149,7 +192,9 @@ class DemoRecorder:
             )
 
     def model_started(self, model: str) -> str:
-        return ""
+        call_id = str(len(self._model_usage) + 1)
+        self._model_usage[call_id] = None
+        return call_id
 
     def model_finished(
         self,
@@ -158,12 +203,32 @@ class DemoRecorder:
         usage: dict[str, int | None] | None,
         error_type: str | None,
     ) -> None:
-        pass
+        if call_id in self._model_usage and usage is not None:
+            self._model_usage[call_id] = {
+                key: value if type(value) is int and value >= 0 else None
+                for key in ("input_tokens", "output_tokens", "total_tokens")
+                for value in [usage.get(key)]
+            }
 
     def finish(
         self, state: DebugSessionState, diagnosis: DebugDiagnosis | None
     ) -> None:
         self._selected = None
+        tokens: dict[str, int | None] = {}
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            values = [(usage or {}).get(key) for usage in self._model_usage.values()]
+            tokens[key] = (
+                sum(value for value in values if value is not None)
+                if values and all(value is not None for value in values) else None
+            )
+        self.metrics = DemoExecutionMetrics(
+            duration_seconds=(
+                monotonic() - self._started_at if self._started_at is not None else None
+            ),
+            tool_attempt_count=sum(step.kind == "tool_attempt" for step in self.steps),
+            model_request_count=len(self._model_usage) or None,
+            **tokens,
+        )
 
 
 @asynccontextmanager
