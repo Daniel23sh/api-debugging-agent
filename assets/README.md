@@ -1,7 +1,14 @@
-# Portfolio evidence
+# Project images and demo recordings
 
-These assets document recorded behavior. No agent, judge, or paid API request
-was run to create them. Raw snapshots and Phoenix databases remain ignored.
+These assets document recorded behavior. The historical assets described below
+were created without new agent or judge calls. Current, separately approved live
+demo captures are in [demo/](demo/README.md). Raw snapshots and
+Phoenix databases remain ignored.
+
+The [25 October V3 verification](../evaluation/reports/v3-verification-2026-10-25.md)
+separately records 17/18 strict successes on the full frozen dataset. The media
+here retains its original dates and trace identities; no image or video represents
+the V3 run.
 
 ## Architecture
 
@@ -51,20 +58,13 @@ IDs are clipped by the UI; full reviewed lookup IDs are listed above. Phoenix's
 `Unset` is an OpenTelemetry span status, not the final diagnosis status; its cost
 display is a UI estimate, not a measured billing result or a cost-savings claim.
 
-## Recorded experiment comparison
+## Current results overview
 
-[`v1-v2-results.svg`](v1-v2-results.svg) is a newly authored vector chart of the
-sanitized [2026-10-21 comparison report](../evaluation/reports/v1-v2-experiment-2026-10-21.md#results-and-denominators).
-It is not a screenshot of Phoenix or a historical comparison interface.
-
-The bars use a common zero-to-18 scale: V1 = 13/18 (72.2%), V2 = 15/18 (83.3%).
-All 13 original strict successes were retained. Percentages are rounded to one
-decimal place. Strict success requires expected status, full grounding, and
-correct root cause where applicable; the insufficient-input control is included.
-The README separately reports unchanged grounding counts, the remaining failures,
-token reduction, and increased latency.
-
-The SVG is self-contained text with accessible title/description, no scripts,
-external images, fonts, or data requests. Values can be checked directly against
-the report and the README table. One run per case per version supports an observed
-comparison, not a statistical reliability estimate.
+[`v1-v2-v3-results.svg`](v1-v2-v3-results.svg) is the main README's results chart,
+using the same zero-to-18 scale and adding V3 = 17/18 (94.4%) from the
+[separate V3 report](../evaluation/reports/v3-verification-2026-10-25.md).
+The chart explicitly distinguishes the controlled V1/V2 experiment from V3's
+current-system verification; it does not imply a third controlled arm or causal
+attribution. It is a self-contained accessible SVG, not a captured interface.
+The original V1/V2 measurements remain in the
+[historical comparison report](../evaluation/reports/v1-v2-experiment-2026-10-21.md).

@@ -1,0 +1,2369 @@
+{
+  "kind": "apilens-v3-verification-summary",
+  "experiment": {
+    "kind": "apilens-v3-verification",
+    "format_version": 1,
+    "experiment_id": "9cb480ec-480f-42e9-b887-68ba64018de5",
+    "mode": "live",
+    "created_at": "2026-10-25T10:07:23.651340+00:00",
+    "config": {
+      "agent_model": "gpt-6-sol",
+      "reasoning_effort": "medium",
+      "judge_model": "gpt-6.1-sol",
+      "limits": {
+        "max_agent_decisions": 8,
+        "max_tool_calls": 6,
+        "max_identical_tool_calls": 2,
+        "session_timeout_seconds": 45
+      }
+    },
+    "case_ids": [
+      "inventory_validation_zero_01",
+      "inventory_validation_zero_02",
+      "inventory_validation_zero_03",
+      "product_missing_status_01",
+      "product_missing_status_02",
+      "product_missing_status_03",
+      "order_total_quantity_01",
+      "order_total_quantity_02",
+      "order_total_quantity_03",
+      "order_missing_inventory_01",
+      "order_missing_inventory_02",
+      "order_missing_inventory_03",
+      "order_response_schema_01",
+      "order_response_schema_02",
+      "order_response_schema_03",
+      "order_create_status_no_bug",
+      "inventory_update_status_no_bug",
+      "insufficient_report_no_endpoint"
+    ],
+    "fixture_id": "sandbox-v1",
+    "dataset_sha256": "ea0d431c9ff6dc23aa914b4ead6efc8403d931e04a0576de400c111502eb5c0a",
+    "source_sha256": "c6d66fc8742bc6edde3c7787611ddeee4b2b594ed813f9598331a1a40bfc8522",
+    "git_commit": "a295e7b7b24aa9e95efec16b7200bf444b10f3e3",
+    "runtime_versions": {
+      "python": "3.13.11",
+      "openai": "3.19.0",
+      "pydantic": "2.13.5",
+      "httpx": "0.28.1",
+      "fastapi": "0.141.1",
+      "opentelemetry-sdk": "1.44.0",
+      "arize-phoenix-otel": "0.17.1"
+    }
+  },
+  "evaluation_revision": "initial",
+  "total_cases": 18,
+  "execution_states": {
+    "RETURNED": 18
+  },
+  "evaluation_states": {
+    "COMPLETE": 18
+  },
+  "final_statuses": {
+    "RESOLVED": 15,
+    "NO_BUG_FOUND": 2,
+    "INCONCLUSIVE": 1
+  },
+  "expected_status": {
+    "denominator": 18,
+    "matches": 18,
+    "mismatches": 0,
+    "missing": 0
+  },
+  "successful_runs": 17,
+  "evaluators": {
+    "tool_selection": {
+      "expected_units": 72,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 54,
+        "NOT_APPLICABLE": 18,
+        "UNDETERMINED": 0,
+        "ERROR": 0
+      },
+      "labels": {
+        "APPROPRIATE": 50,
+        "UNNECESSARY": 4
+      }
+    },
+    "tool_arguments": {
+      "expected_units": 72,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 52,
+        "NOT_APPLICABLE": 18,
+        "UNDETERMINED": 2,
+        "ERROR": 0
+      },
+      "labels": {
+        "CORRECT": 52
+      }
+    },
+    "root_cause": {
+      "expected_units": 18,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 15,
+        "NOT_APPLICABLE": 3,
+        "UNDETERMINED": 0,
+        "ERROR": 0
+      },
+      "labels": {
+        "CORRECT": 15
+      }
+    },
+    "grounding": {
+      "expected_units": 18,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 18,
+        "NOT_APPLICABLE": 0,
+        "UNDETERMINED": 0,
+        "ERROR": 0
+      },
+      "labels": {
+        "GROUNDED": 17,
+        "PARTIALLY_GROUNDED": 1
+      }
+    },
+    "response_quality": {
+      "expected_units": 18,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 18,
+        "NOT_APPLICABLE": 0,
+        "UNDETERMINED": 0,
+        "ERROR": 0
+      },
+      "labels": {
+        "GOOD": 18
+      }
+    },
+    "trajectory": {
+      "expected_units": 18,
+      "missing_units": 0,
+      "unknown_unit_cases": 0,
+      "states": {
+        "SCORED": 18,
+        "NOT_APPLICABLE": 0,
+        "UNDETERMINED": 0,
+        "ERROR": 0
+      },
+      "labels": {}
+    }
+  },
+  "measurements": {
+    "latency_seconds": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 134.23753504035994,
+      "mean_observed": 7.457640835575552,
+      "total_all_cases": 134.23753504035994
+    },
+    "model_calls": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 72,
+      "mean_observed": 4.0,
+      "total_all_cases": 72
+    },
+    "tool_calls": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 54,
+      "mean_observed": 3.0,
+      "total_all_cases": 54
+    },
+    "input_tokens": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 114554,
+      "mean_observed": 6364.111111111111,
+      "total_all_cases": 114554
+    },
+    "output_tokens": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 6389,
+      "mean_observed": 354.94444444444446,
+      "total_all_cases": 6389
+    },
+    "total_tokens": {
+      "observed_cases": 18,
+      "missing_cases": 0,
+      "sum_observed": 120943,
+      "mean_observed": 6719.055555555556,
+      "total_all_cases": 120943
+    }
+  },
+  "evaluator_versions_observed": {
+    "tool_selection": [
+      "1"
+    ],
+    "tool_arguments": [
+      "1"
+    ],
+    "root_cause": [
+      "1"
+    ],
+    "grounding": [
+      "2"
+    ],
+    "response_quality": [
+      "2"
+    ],
+    "trajectory": [
+      "1"
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "inventory_validation_zero_01",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "60e5a629-fa44-4a72-abfa-d799a79930df",
+      "trace_id": "1bc6b005b1b3eeb52445f49466d21578",
+      "session_span_id": "bacec14b2869c9f7",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 9.697235750034451,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6050,
+          "output_tokens": 390,
+          "total_tokens": 6440,
+          "cached_input_tokens": 3103,
+          "reasoning_output_tokens": 57
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "inventory_validation_zero_01",
+        "session_id": "60e5a629-fa44-4a72-abfa-d799a79930df",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "inventory_validation_zero_02",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "da74a482-6820-4514-8533-277cf5f051e5",
+      "trace_id": "f940027dc203cb6b2cb8e1a1c37193cc",
+      "session_span_id": "f446d07089c13b9a",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 7.286992082837969,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6052,
+          "output_tokens": 389,
+          "total_tokens": 6441,
+          "cached_input_tokens": 3104,
+          "reasoning_output_tokens": 37
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "inventory_validation_zero_02",
+        "session_id": "da74a482-6820-4514-8533-277cf5f051e5",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "inventory_validation_zero_03",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "bf0cc45d-3080-4367-bc3b-ebb5fae3aaa9",
+      "trace_id": "fabdb87e9f042f10814feff5410a8edb",
+      "session_span_id": "ba43e4c301dda9c0",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 9.945952250156552,
+        "model_calls": 5,
+        "tool_calls": 4,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 8287,
+          "output_tokens": 441,
+          "total_tokens": 8728,
+          "cached_input_tokens": 5072,
+          "reasoning_output_tokens": 61
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 5,
+      "path_length": 9,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3,
+            "UNNECESSARY": 1
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 4
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 5,
+              "tool_attempts": 4,
+              "path_length": 9,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 1
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "inventory_validation_zero_03",
+        "session_id": "bf0cc45d-3080-4367-bc3b-ebb5fae3aaa9",
+        "ratio": 0.7777777777777778,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "product_missing_status_01",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "46d72d8b-788a-405b-a403-a572b1278bd8",
+      "trace_id": "0ab37675e2b93f724b47ac995c9a3bdc",
+      "session_span_id": "438058d7cdf23f01",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 8.143926999997348,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 5808,
+          "output_tokens": 361,
+          "total_tokens": 6169,
+          "cached_input_tokens": 2988,
+          "reasoning_output_tokens": 34
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "product_missing_status_01",
+        "session_id": "46d72d8b-788a-405b-a403-a572b1278bd8",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "product_missing_status_02",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "e769d745-6c33-4edb-9dc2-004826b614fb",
+      "trace_id": "ddaa5d00cdbd69fe9f66e9243c323c1d",
+      "session_span_id": "386affc468f54a14",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 6.919522000011057,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 5852,
+          "output_tokens": 333,
+          "total_tokens": 6185,
+          "cached_input_tokens": 3006,
+          "reasoning_output_tokens": 41
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "product_missing_status_02",
+        "session_id": "e769d745-6c33-4edb-9dc2-004826b614fb",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "product_missing_status_03",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "76e9e2b3-3b6d-4e9f-a48a-1aee1124cee3",
+      "trace_id": "b297d8ea0d72a68b87e138b775eb2a98",
+      "session_span_id": "9f65df37d54bfa19",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 6.325428750133142,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 5853,
+          "output_tokens": 329,
+          "total_tokens": 6182,
+          "cached_input_tokens": 3011,
+          "reasoning_output_tokens": 40
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "product_missing_status_03",
+        "session_id": "76e9e2b3-3b6d-4e9f-a48a-1aee1124cee3",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "order_total_quantity_01",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "b3b74696-d8c9-40dd-b7e5-050f58b3cbc3",
+      "trace_id": "968b0d9ae97e76eaef7ac19d971d4878",
+      "session_span_id": "f6452f39c7d32491",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 9.790258333086967,
+        "model_calls": 6,
+        "tool_calls": 5,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 12063,
+          "output_tokens": 422,
+          "total_tokens": 12485,
+          "cached_input_tokens": 8148,
+          "reasoning_output_tokens": 26
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 6,
+      "path_length": 11,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 6,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 5,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 4,
+            "UNNECESSARY": 1
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 6,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "UNDETERMINED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 6,
+              "tool_attempts": 5,
+              "path_length": 11,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 1
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_total_quantity_01",
+        "session_id": "b3b74696-d8c9-40dd-b7e5-050f58b3cbc3",
+        "ratio": 0.45454545454545453,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 5
+      }
+    },
+    {
+      "case_id": "order_total_quantity_02",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "6a1a8031-b0bf-4eed-9a52-e18539aec54a",
+      "trace_id": "299d81063c1e9f0ef7ad1371a05065a8",
+      "session_span_id": "3467afd76b076c54",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 7.112069416791201,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6452,
+          "output_tokens": 314,
+          "total_tokens": 6766,
+          "cached_input_tokens": 3225,
+          "reasoning_output_tokens": 45
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_total_quantity_02",
+        "session_id": "6a1a8031-b0bf-4eed-9a52-e18539aec54a",
+        "ratio": 0.7142857142857143,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 5
+      }
+    },
+    {
+      "case_id": "order_total_quantity_03",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "2bc99f65-7858-43cd-8345-0a3c2202de0e",
+      "trace_id": "8b738d56897f6738580113d80bc513e7",
+      "session_span_id": "d7b02a46989f3239",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 5.190266667166725,
+        "model_calls": 3,
+        "tool_calls": 2,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 4584,
+          "output_tokens": 284,
+          "total_tokens": 4868,
+          "cached_input_tokens": 1536,
+          "reasoning_output_tokens": 46
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 3,
+      "path_length": 5,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 2
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 2
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 3,
+              "tool_attempts": 2,
+              "path_length": 5,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_total_quantity_03",
+        "session_id": "2bc99f65-7858-43cd-8345-0a3c2202de0e",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 5
+      }
+    },
+    {
+      "case_id": "order_missing_inventory_01",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "1ceabb7d-a405-45f4-89ea-d3e4f1b0b9eb",
+      "trace_id": "e103d9d965a3d33b97636ee9c9c9ab4f",
+      "session_span_id": "c83d3849738581d2",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": false,
+        "reason": "GROUNDING_NOT_SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 9.505733457859606,
+        "model_calls": 5,
+        "tool_calls": 4,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 8471,
+          "output_tokens": 473,
+          "total_tokens": 8944,
+          "cached_input_tokens": 5076,
+          "reasoning_output_tokens": 68
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 5,
+      "path_length": 9,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 4
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 4
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "PARTIALLY_GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 5,
+              "tool_attempts": 4,
+              "path_length": 9,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_missing_inventory_01",
+        "session_id": "1ceabb7d-a405-45f4-89ea-d3e4f1b0b9eb",
+        "ratio": null,
+        "reason": "GROUNDING_NOT_SUCCESSFUL",
+        "shortest_successful_observed_path": null
+      }
+    },
+    {
+      "case_id": "order_missing_inventory_02",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "23c9d41d-7845-41d5-a6c8-a41a7a6c8f43",
+      "trace_id": "1b6d833feff010c5504d0c009535ab97",
+      "session_span_id": "774e765abfe61660",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 10.553216291125864,
+        "model_calls": 5,
+        "tool_calls": 4,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 8483,
+          "output_tokens": 533,
+          "total_tokens": 9016,
+          "cached_input_tokens": 5083,
+          "reasoning_output_tokens": 114
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 5,
+      "path_length": 9,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 4
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 4
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 5,
+              "tool_attempts": 4,
+              "path_length": 9,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_missing_inventory_02",
+        "session_id": "23c9d41d-7845-41d5-a6c8-a41a7a6c8f43",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 9
+      }
+    },
+    {
+      "case_id": "order_missing_inventory_03",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "b24eb943-5014-4338-9c68-38a94f550a66",
+      "trace_id": "17fcdd12b5bcfb6f3d27adb5d67ad80c",
+      "session_span_id": "4a722848fc7569bd",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 8.763562000123784,
+        "model_calls": 5,
+        "tool_calls": 4,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 8562,
+          "output_tokens": 492,
+          "total_tokens": 9054,
+          "cached_input_tokens": 5130,
+          "reasoning_output_tokens": 73
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 5,
+      "path_length": 9,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 4
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 5,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 4,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 4
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 5,
+              "tool_attempts": 4,
+              "path_length": 9,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_missing_inventory_03",
+        "session_id": "b24eb943-5014-4338-9c68-38a94f550a66",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 9
+      }
+    },
+    {
+      "case_id": "order_response_schema_01",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "a92a1891-abdc-4444-b31e-44df3ccd0b30",
+      "trace_id": "c3b4a79a1ba55d33a7d44b8919f9a46f",
+      "session_span_id": "bdeee2e19707232b",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 7.556965749943629,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6021,
+          "output_tokens": 305,
+          "total_tokens": 6326,
+          "cached_input_tokens": 3083,
+          "reasoning_output_tokens": 0
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_response_schema_01",
+        "session_id": "a92a1891-abdc-4444-b31e-44df3ccd0b30",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "order_response_schema_02",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "1be0fc95-bd70-4ca8-b8a0-ca40deb86ba4",
+      "trace_id": "c3c833b48f590f9d27274696765cd430",
+      "session_span_id": "2e8fbf1b0a4012e6",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 7.939453416969627,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6120,
+          "output_tokens": 356,
+          "total_tokens": 6476,
+          "cached_input_tokens": 3139,
+          "reasoning_output_tokens": 24
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_response_schema_02",
+        "session_id": "1be0fc95-bd70-4ca8-b8a0-ca40deb86ba4",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "order_response_schema_03",
+      "case_kind": "bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "8a241c37-fc88-4f06-9c77-2d6b75943884",
+      "trace_id": "a15e3a4998dbd25bdd51398ce3bd9ddd",
+      "session_span_id": "39ba77579f56acc8",
+      "expected_final_status": "RESOLVED",
+      "actual_final_status": "RESOLVED",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 6.656206083018333,
+        "model_calls": 4,
+        "tool_calls": 3,
+        "final_status": "RESOLVED",
+        "token_usage": {
+          "input_tokens": 6139,
+          "output_tokens": 363,
+          "total_tokens": 6502,
+          "cached_input_tokens": 3143,
+          "reasoning_output_tokens": 48
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 4,
+      "path_length": 7,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 3
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 4,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 3,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 3
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "CORRECT": 1
+          },
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 4,
+              "tool_attempts": 3,
+              "path_length": 7,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_response_schema_03",
+        "session_id": "8a241c37-fc88-4f06-9c77-2d6b75943884",
+        "ratio": 1.0,
+        "reason": "SUCCESSFUL_OBSERVED_COHORT",
+        "shortest_successful_observed_path": 7
+      }
+    },
+    {
+      "case_id": "order_create_status_no_bug",
+      "case_kind": "no_bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "684909ff-b7de-447f-a561-3ccb1f3f245a",
+      "trace_id": "c8bdf425f3172050334a14dc7466251f",
+      "session_span_id": "93c758f139b64391",
+      "expected_final_status": "NO_BUG_FOUND",
+      "actual_final_status": "NO_BUG_FOUND",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 4.567440540995449,
+        "model_calls": 3,
+        "tool_calls": 2,
+        "final_status": "NO_BUG_FOUND",
+        "token_usage": {
+          "input_tokens": 4578,
+          "output_tokens": 215,
+          "total_tokens": 4793,
+          "cached_input_tokens": 1526,
+          "reasoning_output_tokens": 44
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 3,
+      "path_length": 5,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 1,
+            "UNNECESSARY": 1
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 2
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {},
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 3,
+              "tool_attempts": 2,
+              "path_length": 5,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 1
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "order_create_status_no_bug",
+        "session_id": "684909ff-b7de-447f-a561-3ccb1f3f245a",
+        "ratio": null,
+        "reason": "NO_PARAPHRASE_GROUP",
+        "shortest_successful_observed_path": null
+      }
+    },
+    {
+      "case_id": "inventory_update_status_no_bug",
+      "case_kind": "no_bug",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "fdba3f03-5e74-48c4-9d2a-dc05796ee7d8",
+      "trace_id": "6731eaa1f8c2e4985f53eb85c94ad8bc",
+      "session_span_id": "c14b328d95ab3abb",
+      "expected_final_status": "NO_BUG_FOUND",
+      "actual_final_status": "NO_BUG_FOUND",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 6.246348333079368,
+        "model_calls": 3,
+        "tool_calls": 2,
+        "final_status": "NO_BUG_FOUND",
+        "token_usage": {
+          "input_tokens": 4263,
+          "output_tokens": 280,
+          "total_tokens": 4543,
+          "cached_input_tokens": 1460,
+          "reasoning_output_tokens": 99
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 3,
+      "path_length": 5,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "APPROPRIATE": 1,
+            "UNNECESSARY": 1
+          },
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 3,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 2,
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {
+            "CORRECT": 2
+          },
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {},
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 3,
+              "tool_attempts": 2,
+              "path_length": 5,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 1
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "inventory_update_status_no_bug",
+        "session_id": "fdba3f03-5e74-48c4-9d2a-dc05796ee7d8",
+        "ratio": null,
+        "reason": "NO_PARAPHRASE_GROUP",
+        "shortest_successful_observed_path": null
+      }
+    },
+    {
+      "case_id": "insufficient_report_no_endpoint",
+      "case_kind": "inconclusive",
+      "execution_state": "RETURNED",
+      "execution_error_type": null,
+      "evaluation_state": "COMPLETE",
+      "evaluation_error_type": null,
+      "session_id": "ca5314d9-72e5-4e16-a908-565295fa9787",
+      "trace_id": "a0a9140906eb51b2e627e5cf5fa36f1f",
+      "session_span_id": "52983c095b7b31f8",
+      "expected_final_status": "INCONCLUSIVE",
+      "actual_final_status": "INCONCLUSIVE",
+      "expected_status_match": true,
+      "success_eligibility": {
+        "eligible": true,
+        "reason": "SUCCESSFUL"
+      },
+      "system_metrics": {
+        "latency_seconds": 2.036956917028874,
+        "model_calls": 1,
+        "tool_calls": 0,
+        "final_status": "INCONCLUSIVE",
+        "token_usage": {
+          "input_tokens": 916,
+          "output_tokens": 109,
+          "total_tokens": 1025,
+          "cached_input_tokens": 0,
+          "reasoning_output_tokens": 36
+        },
+        "error_counts": {}
+      },
+      "decision_attempts": 1,
+      "path_length": 1,
+      "evaluators": {
+        "tool_selection": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {},
+          "values": []
+        },
+        "tool_arguments": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {},
+          "values": []
+        },
+        "root_cause": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "NOT_APPLICABLE": 1
+          },
+          "labels": {},
+          "values": []
+        },
+        "grounding": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GROUNDED": 1
+          },
+          "values": []
+        },
+        "response_quality": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {
+            "GOOD": 1
+          },
+          "values": []
+        },
+        "trajectory": {
+          "expected_units": 1,
+          "missing_units": 0,
+          "states": {
+            "SCORED": 1
+          },
+          "labels": {},
+          "values": [
+            {
+              "decision_attempts": 1,
+              "tool_attempts": 0,
+              "path_length": 1,
+              "duplicate_calls": 0,
+              "non_retry_duplicate_calls": 0,
+              "timeout_retries": 0,
+              "unnecessary_tool_attempts": 0
+            }
+          ]
+        }
+      },
+      "convergence": {
+        "case_id": "insufficient_report_no_endpoint",
+        "session_id": "ca5314d9-72e5-4e16-a908-565295fa9787",
+        "ratio": null,
+        "reason": "NO_PARAPHRASE_GROUP",
+        "shortest_successful_observed_path": null
+      }
+    }
+  ],
+  "limitations": [
+    "Offline mode is plumbing verification, not V1 performance data.",
+    "Label distributions use scored units; states and missing units are reported separately.",
+    "Observed sums/means are partial when missing_cases is nonzero; total_all_cases is then null.",
+    "Convergence uses only successful comparable observed paths and does not prove optimality.",
+    "Trace IDs are references only; Phoenix availability must be independently verified.",
+    "Judges are qualitative measurements, not ground truth; no aggregate quality score is computed."
+  ]
+}

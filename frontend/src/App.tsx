@@ -152,12 +152,10 @@ export default function App() {
           </section>
           {run.status === 'success' && <ExecutionMetrics metrics={run.response.metrics} />}
           </div>
-          {run.status === 'success' && <>
-            <section id="findings-panel" tabIndex={-1} className="panel diagnosis-panel" aria-labelledby="diagnosis-title">
-              <div className="panel-header"><div><p className="eyebrow">03 / THE FINDINGS</p><h2 id="diagnosis-title">Diagnosis &amp; evidence</h2></div><span className="panel-caption">Observed support</span></div>
-              <Diagnosis diagnosis={run.response.diagnosis} />
-            </section>
-          </>}
+          {run.status === 'success' && <section id="findings-panel" tabIndex={-1} className="panel diagnosis-panel" aria-labelledby="diagnosis-title">
+            <div className="panel-header"><div><p className="eyebrow">03 / THE FINDINGS</p><h2 id="diagnosis-title">Diagnosis &amp; evidence</h2></div><span className="panel-caption">Observed support</span></div>
+            <Diagnosis diagnosis={run.response.diagnosis} />
+          </section>}
           {run.status !== 'idle' && <details className="submitted-report"><summary>Submitted report</summary><p>{run.report}</p></details>}
           {run.status === 'success' ? <details className="panel timeline-panel result-disclosure" open={run.response.steps.length === 0}>
             <summary id="timeline-summary"><div><p className="eyebrow">04 / THE INVESTIGATION</p><h2 id="timeline-title">Follow the evidence</h2><p>{run.response.steps.length} recorded steps · Expand the chronological investigation</p></div></summary>

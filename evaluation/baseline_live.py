@@ -24,6 +24,7 @@ from agent_service.observability import (
 )
 from evaluation.baseline import (
     BASELINES,
+    EXPERIMENT_KINDS,
     ROOT,
     BaselineConfig,
     BaselineError,
@@ -164,7 +165,7 @@ async def preflight(
     config: BaselineConfig,
     *,
     url: str,
-    variant: Literal["v1", "v2"] = "v1",
+    variant: Literal["v1", "v2", "v3"] = "v1",
     v1_directory: Path | None = None,
     v1_report_id: str | None = None,
     v1_source_ref: str | None = None,
@@ -357,7 +358,7 @@ def main() -> None:
     parser.add_argument("--judge-model")
     parser.add_argument("--phoenix-url", default="http://127.0.0.1:6006")
     parser.add_argument("--approve-paid", action="store_true")
-    parser.add_argument("--variant", choices=("v1", "v2"), default="v1")
+    parser.add_argument("--variant", choices=EXPERIMENT_KINDS, default="v1")
     parser.add_argument("--v1-directory", type=Path)
     parser.add_argument("--v1-report-id")
     parser.add_argument("--v1-source-ref")

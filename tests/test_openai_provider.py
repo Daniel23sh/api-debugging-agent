@@ -410,6 +410,9 @@ async def test_real_sdk_parse_request_shape_uses_strict_text_format() -> None:
     wire = requests[0]
     assert wire["text"]["format"]["type"] == "json_schema"
     assert wire["text"]["format"]["strict"] is True
+    description = wire["text"]["format"]["schema"]["description"]
+    assert "NO_BUG_FOUND requires evidence, root_cause=null and suggested_fix=null" in description
+    assert "INCONCLUSIVE requires missing_evidence and root_cause=null" in description
     assert_strict_objects(wire["text"]["format"]["schema"])
     assert wire["parallel_tool_calls"] is False
     assert {tool["name"] for tool in wire["tools"]} == {
@@ -516,3 +519,106 @@ async def test_alternate_model_trajectory_finishes_without_fixed_tool_order(tmp_
     assert diagnosis.status == "NO_BUG_FOUND"
     assert current.tool_call_count == 1
     assert current.tool_history[0].tool_name == "inspect_api_spec"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "path", "body", "status_code"), [
+    ("POST", "/orders", {"product_id": 1, "quantity": 1}, 201),
+    ("PATCH", "/inventory/1", {"quantity": 1}, 200),
+])
+async def test_real_sdk_no_bug_paths_preserve_observed_evidence(
+    tmp_path: Path, method: str, path: str, body: dict, status_code: int,
+) -> None:
+    """Exercise SDK parsing, translation, real tools and semantic acceptance."""
+    requests = []
+    diagnosis = final_response("final", "NO_BUG_FOUND").output_parsed
+    diagnosis["affected_endpoint"] = f"{method} {path}"
+    diagnosis["evidence"] = [
+        {"source": "api_spec", "finding": f"Contract documents HTTP {status_code}"},
+        {"source": "api_execution", "finding": f"Probe returned HTTP {status_code}"},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        wire = json.loads(request.content)
+        requests.append(wire)
+        number = len(requests)
+        if number < 3:
+            arguments = {"method": method, "path": path}
+            if number == 2:
+                arguments["body"] = json.dumps(body)
+            output = [{
+                "type": "function_call", "id": f"function-{number}",
+                "status": "completed", "name": (
+                    "inspect_api_spec" if number == 1 else "execute_api_request"
+                ), "call_id": f"call-{number}", "arguments": json.dumps(arguments),
+            }]
+        else:
+            observed = json.loads(wire["input"][0]["output"])["observations"][0]
+            assert observed["success"] is True
+            assert observed["data"]["status_code"] == status_code
+            output = [{
+                "type": "message", "id": "message-final", "status": "completed",
+                "role": "assistant", "phase": "final_answer", "content": [{
+                    "type": "output_text", "text": json.dumps(diagnosis),
+                    "annotations": [],
+                }],
+            }]
+        return httpx.Response(200, json={
+            "id": f"response-{number}", "object": "response", "created_at": 0,
+            "model": "test-model", "status": "completed", "output": output,
+        })
+
+    database = Database(tmp_path / "no-bug.db")
+    database.initialize()
+    current = DebugSessionState(session_id="no-bug-session", issue=f"Check {method} {path}")
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = AsyncOpenAI(api_key="test-key", http_client=http_client, max_retries=0)
+        result = await run_agent(
+            current, OpenAIDecisionProvider(client=client), database=database,
+            transport=httpx.ASGITransport(app=create_app(database.path)),
+        )
+    assert result.status == "NO_BUG_FOUND"
+    assert result.root_cause is result.suggested_fix is None
+    assert len(result.evidence) == 2
+    assert current.tool_call_count == 2
+    assert len(current.request_ids) == 1
+    assert len(requests) == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_field", ["root_cause", "suggested_fix"])
+async def test_no_bug_semantics_reject_fabricated_cause_or_fix(invalid_field: str) -> None:
+    invalid = final_response("bad", "NO_BUG_FOUND")
+    invalid.output_parsed[invalid_field] = "PRIVATE-MARKER"
+    adapter, fake = provider(invalid, invalid)
+    current = state()
+    diagnosis = await run_agent(current, adapter)
+    assert diagnosis.status == "INCONCLUSIVE"
+    assert len(fake.requests) == 2
+    assert current.observations[0].error["type"] == "MODEL_OUTPUT_VALIDATION_ERROR"
+    assert "PRIVATE-MARKER" not in diagnosis.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_rejection_diagnostics_are_private_fixed_categories(caplog) -> None:
+    invalid = final_response("bad", "NO_BUG_FOUND")
+    invalid.output_parsed["root_cause"] = "PRIVATE-REPORT-SECRET"
+    adapter, _ = provider(invalid, final_response("corrected", "NO_BUG_FOUND"))
+    decision = await adapter.next_decision(state())
+    assert decision.diagnosis.status == "NO_BUG_FOUND"
+    assert "stage=translation category=no_bug_cause_or_fix attempt=1" in caplog.text
+    assert "PRIVATE-REPORT-SECRET" not in caplog.text
+    assert "POST /orders returns 500" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_sdk_rejection_diagnostic_distinguishes_parsing_from_translation(caplog) -> None:
+    try:
+        DebugDiagnosis.model_validate({"status": "PRIVATE-INVALID-STATUS"})
+    except ValidationError as error:
+        parse_error = error
+    adapter, _ = provider(parse_error, final_response("corrected", "NO_BUG_FOUND"))
+    decision = await adapter.next_decision(state())
+    assert decision.diagnosis.status == "NO_BUG_FOUND"
+    assert "stage=sdk_parse category=schema_validation attempt=1" in caplog.text
+    assert "PRIVATE-INVALID-STATUS" not in caplog.text

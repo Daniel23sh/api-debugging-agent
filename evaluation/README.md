@@ -1,7 +1,26 @@
-# Phase 7 evaluation
+# Evaluation
 
-The full-dataset Phase 8 workflow is documented in [BASELINE.md](BASELINE.md).
-Calibration remains limited to its six approved cases.
+The full-dataset collection/archive workflow is documented in
+[BASELINE.md](BASELINE.md). The six-case calibration procedure below remains
+separate from full-dataset experiments.
+
+## Recorded results
+
+- [Historical V1/V2 experiment](reports/v1-v2-experiment-2026-10-21.md):
+  13/18 → 15/18 strict successes; the original results remain unchanged.
+- [Current-system V3 verification](reports/v3-verification-2026-10-25.md):
+  17/18 strict successes on 2026-10-25, with 18/18 expected status matches.
+  Both no-bug cases passed and all 15 V2 strict successes were retained.
+  [Protocol and completion record](V3.md) ·
+  [Saved summary](reports/v3-verification-2026-10-25.json).
+
+V3 is a separate current-system measurement, not a controlled schema-only
+intervention or a replacement for V1/V2. One run per case does not establish
+reliability. The remaining partial-grounding case and judge evidence-view
+limitation are documented in its report. These records do not authorize new
+paid executions.
+
+## Recording and evaluator interfaces
 
 `EvaluationCase` remains the Phase 6 expected behavior. `EvaluationRun` is an
 opt-in snapshot of actual agent activity. `EvaluatorResult` judges one decision
@@ -87,9 +106,9 @@ therefore does not establish a global optimum or prove correctness.
 
 ## Six-case human calibration
 
-Phase 7 cannot close until real human labeling and disagreement review finish.
-Automated mocked tests do not substitute for this step. There is no full-dataset
-run or `--all` option here; Phase 8 remains separate.
+Calibration completion requires real human labeling and disagreement review.
+Automated mocked tests do not substitute for this step. The calibration command
+has no full-dataset run or `--all` option; use the separate baseline workflow.
 
 Set `OPENAI_API_KEY`, the agent settings and **`EVAL_JUDGE_MODEL` explicitly** in
 `.env`. The following command makes paid model calls for exactly the six approved
@@ -173,8 +192,10 @@ The Phase 6 dataset, contract and reproducibility tests remain unchanged.
 
 `.github/workflows/ci.yml` runs one Ubuntu/Python 3.13 job for pull requests to
 `main` and pushes to `main`: constrained development installation, Ruff, Mypy,
-then full pytest (including Golden tests once). Any command failure fails the
-job. Repository permissions are read-only; no secrets or services are configured.
+then full pytest (including Golden tests once). The same `checks` job also uses
+Node.js 22 to run `npm ci`, `npm run typecheck`, `npm test` and `npm run build`
+from `frontend/`. Frontend tests mock network calls. Any command failure fails
+the job. Repository permissions are read-only; no secrets or services are configured.
 The test environment disables `.env` loading and blanks agent/judge credentials
 and the Phoenix collector endpoint. Dependency installation uses the network;
 application tests use mocked providers, in-process HTTP and temporary SQLite.
@@ -182,6 +203,8 @@ application tests use mocked providers, in-process HTTP and temporary SQLite.
 Mypy is a Python-only development dependency. `python -m mypy` reads the explicit
 strict scope in `pyproject.toml`:
 
+- `agent_service/main.py` and `demo.py`: HTTP entry points, the demo response
+  contract, recording and disposable Sandbox setup.
 - `agent_service/agent/schemas.py` and `state.py`: decisions, diagnoses,
   observations, session transitions and execution limits.
 - `agent_service/tools/contracts.py` and `endpoints.py`: tool results and approved
@@ -211,6 +234,10 @@ Before merging, require all of the following on the current PR revision:
 | `ruff check .` | Lint checks |
 | `python -m mypy` | The strict production scope above |
 | `python -m pytest` | All unit, integration, contract, safety and Golden tests |
+| `npm ci` (from `frontend/`) | Frontend installation from the committed lockfile |
+| `npm run typecheck` (from `frontend/`) | Frontend TypeScript contracts |
+| `npm test` (from `frontend/`) | Frontend behavior with mocked network calls |
+| `npm run build` (from `frontend/`) | Frontend production compilation |
 
 The full suite includes deterministic security boundaries such as rejected tool
 arguments, approved endpoint restrictions and agent execution limits, plus real
@@ -272,10 +299,12 @@ must fail the log-argument evaluator.
 Network connections are blocked in this module; no API key, OpenAI call, judge
 service or Phoenix instance is required. Scripted final diagnoses check structured
 application acceptance after runtime assertions, not model reasoning or semantic
-answer quality. In particular, accepting valid `NO_BUG_FOUND` does not fix or
-reproduce the live provider's known validation failures. Historical V1/V2 results
-remain live-evaluation observations, not deterministic test scores. Regression
-gates and live evaluation have separate responsibilities as described above.
+answer quality. In particular, scripted acceptance of valid `NO_BUG_FOUND` does
+not establish live provider quality or explain the historical V1/V2 rejection
+subtype. Both no-bug cases passed the separate current-system V3 run; the
+historical failures remain recorded. Live-evaluation observations are not
+deterministic test scores. Regression gates and live evaluation have separate
+responsibilities as described above.
 
 ### Maintaining Golden coverage
 

@@ -46,7 +46,11 @@ from sandbox_api.main import create_app
 ROOT = Path(__file__).resolve().parents[1]
 DATASET = ROOT / "evaluation" / "datasets" / "v1_cases.json"
 BASELINES = ROOT / "evaluation" / "artifacts" / "baseline"
-EXPERIMENT_KINDS = {"v1": "apilens-v1-baseline", "v2": "apilens-v2-experiment"}
+EXPERIMENT_KINDS = {
+    "v1": "apilens-v1-baseline",
+    "v2": "apilens-v2-experiment",
+    "v3": "apilens-v3-verification",
+}
 
 
 class BaselineError(Exception):
@@ -98,7 +102,9 @@ class BaselineConfig(Contract):
 
 
 class BaselineManifest(Contract):
-    kind: Literal["apilens-v1-baseline", "apilens-v2-experiment"] = "apilens-v1-baseline"
+    kind: Literal[
+        "apilens-v1-baseline", "apilens-v2-experiment", "apilens-v3-verification"
+    ] = "apilens-v1-baseline"
     format_version: Literal[1] = 1
     experiment_id: str
     mode: Literal["offline", "live"]
@@ -113,7 +119,7 @@ class BaselineManifest(Contract):
 
     @property
     def variant(self) -> str:
-        return "v1" if self.kind == EXPERIMENT_KINDS["v1"] else "v2"
+        return next(name for name, kind in EXPERIMENT_KINDS.items() if kind == self.kind)
 
 
 class CaseExecution(Contract):
@@ -167,7 +173,7 @@ def new_manifest(
     config: BaselineConfig,
     *,
     mode: Literal["offline", "live"],
-    variant: Literal["v1", "v2"] = "v1",
+    variant: Literal["v1", "v2", "v3"] = "v1",
 ) -> BaselineManifest:
     dataset = cases()
     if config.limits != AgentLimits():
@@ -198,7 +204,7 @@ def initialize(
     config: BaselineConfig,
     *,
     mode: Literal["offline", "live"],
-    variant: Literal["v1", "v2"] = "v1",
+    variant: Literal["v1", "v2", "v3"] = "v1",
 ) -> BaselineManifest:
     manifest = new_manifest(config, mode=mode, variant=variant)
     directory.mkdir(parents=True, exist_ok=False, mode=0o700)

@@ -100,10 +100,10 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .submit-button:disabled { background: #243c37; border-color: #38544e; color: #b2c3be; }
 .submit-hint { color: var(--muted); text-align: center; font-size: 11px; line-height: 1.7; margin-top: 12px; }
 .results-column { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.technical-trace { border: 1px solid var(--border); border-radius: 7px; padding: 5px 18px 14px; background: var(--surface); }
+.technical-trace { border: 1px solid var(--border); border-radius: 7px; padding: 24px 25px; background: var(--surface); }
 .technical-trace a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--accent); font-size: 14px; text-underline-offset: 4px; }
 .technical-trace a:hover { color: var(--accent-strong); }
-.technical-trace p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.technical-trace p { color: var(--muted); font-size: 12px; line-height: 1.8; }
 .submitted-report { border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface); font-size: 13px; }
 .submitted-report summary { padding: 13px 18px; min-height: 44px; }
 .submitted-report p { border-top: 1px solid var(--border); padding: 15px 18px; color: var(--text); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -144,7 +144,6 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .step-metadata { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .step-metadata:empty { display: none; }
 .step-metadata > code { font-size: 11px; color: var(--text); }
-.step-metadata .error-category { color: var(--warning); }
 .request-id { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 10px; overflow-wrap: anywhere; }
 .request-id code { font-size: 11px; margin-left: 4px; }
 .diagnosis-content { padding: 25px 26px; }
@@ -249,9 +248,7 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .step-details { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.7; }
 .step-details > p { margin-top: 8px; overflow-wrap: anywhere; }
 .request-id .copy-action { margin-top: 8px; display: flex; }
-.technical-trace { padding: 24px 25px; }
 .technical-trace h2 { font-size: 18px; margin: 10px 0; }
-.technical-trace p { line-height: 1.8; }
 .trace-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 10px; }
 .trace-dialog { width: calc(100vw - 32px); max-width: none; height: calc(100dvh - 32px); max-height: none; padding: 0; margin: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; }
 .trace-dialog::backdrop { background: rgb(0 0 0 / 80%); }

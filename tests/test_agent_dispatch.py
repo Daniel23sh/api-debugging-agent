@@ -170,6 +170,7 @@ async def test_all_four_tools_share_one_async_dispatch_surface(tmp_path: Path) -
 
     assert all(result.accepted for result in results)
     assert all(result.observation.success for result in results)
+    assert [result.tool_call.tool_name for result in results] == list(TOOL_REGISTRY)
     assert [result.observation.tool_name for result in results] == list(TOOL_REGISTRY)
 
 
@@ -312,6 +313,7 @@ def test_preparation_never_executes_any_tool(monkeypatch: pytest.MonkeyPatch) ->
         )
         prepared = prepare_tool_call(decision(name, arguments))
         assert isinstance(prepared, ToolCallRecord)
+        assert prepared.tool_name == name
         assert prepared.arguments == (
             {"request_id": "dc1c7458-d12c-4c20-9601-f86f6a4466a5"}
             if name == "inspect_server_logs"

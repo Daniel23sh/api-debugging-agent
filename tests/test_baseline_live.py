@@ -66,16 +66,18 @@ def phoenix(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("variant", ["v1", "v3"])
 async def test_preflight_covers_requests_and_verifies_export_without_openai(
-    tmp_path, phoenix, monkeypatch
+    tmp_path, phoenix, monkeypatch, variant
 ):
     monkeypatch.setattr(live, "AsyncOpenAI", lambda **_: pytest.fail("paid SDK"))
     directory = tmp_path / "live"
-    await live.preflight(directory, CONFIG, url="http://phoenix")
+    await live.preflight(directory, CONFIG, url="http://phoenix", variant=variant)
     manifest = load_manifest(directory)
     settings = live.live_settings(directory)
     assert manifest.mode == "live" and manifest.config == CONFIG
-    assert settings["project_name"] == f"apilens-v1-{manifest.experiment_id}"
+    assert manifest.variant == variant
+    assert settings["project_name"] == f"apilens-{variant}-{manifest.experiment_id}"
     check = json.loads((directory / "preflight.json").read_text())
     assert check["paid_calls_made"] == 0
     assert len(check["requests"]) == 18
@@ -182,11 +184,12 @@ async def test_trace_verifier_rejects_wrong_identity_and_preserves_missing(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("missing_trace", [None, "NOT_FOUND", "PARTIAL", "NO_TRACE"])
+@pytest.mark.parametrize("variant", ["v1", "v3"])
 async def test_live_orchestration_frozen_providers_resume_and_verified_links(
-    tmp_path, phoenix, monkeypatch, missing_trace
+    tmp_path, phoenix, monkeypatch, missing_trace, variant
 ):
     directory = tmp_path / "live"
-    await live.preflight(directory, CONFIG, url="http://phoenix")
+    await live.preflight(directory, CONFIG, url="http://phoenix", variant=variant)
     constructed = []
     judgments = []
 
