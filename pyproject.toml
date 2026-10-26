@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "apilens"
 version = "0.1.0"
-description = "Foundation for the APILens API Debugging Agent"
+description = "Evidence-driven API debugging agent with bounded tools and structured diagnoses"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
