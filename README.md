@@ -2,29 +2,33 @@
 
 **An evidence-driven API debugging agent, with bounded tools and measured results.**
 
-APILens investigates natural-language bug reports against a deliberately faulty
-REST API. An LLM chooses what to inspect next; application code validates and
-executes each action, records observations, and enforces limits. The result is a
-structured diagnosis with evidence, missing information, and a suggested fix.
-APILens suggests changes; it does not apply them.
+APILens investigates bug reports against a deliberately faulty REST API. An LLM
+chooses what to inspect; application code validates and executes each action.
+The result is a structured diagnosis with evidence and a suggested fix—not an
+applied code change.
 
-The engineering question is whether an agent can gather the evidence needed to
-explain a failure, rather than produce a plausible answer from a prompt alone.
-APILens combines real HTTP reproduction, request-correlated logs, restricted
-source inspection, explicit session state, and observable decision paths. A frozen
-evaluation dataset makes investigation failures and trade-offs inspectable.
+[Watch the 71-second demo](assets/demo/apilens-demo.mp4) ·
+[Run locally](#run-locally) · [Results](#what-the-experiments-showed) ·
+[Technical walkthrough](assets/demo/WALKTHROUGH.md)
 
-In one recorded 18-case comparison, a focused investigation-guidance change
-increased strict successes from **13/18 to 15/18**, retaining all 13 prior
-successes. This is a limited historical observation, not a reliability guarantee.
+![A real APILens diagnosis with measured execution metrics](assets/demo/investigation-outcome.png)
 
-[Run locally](#run-locally) · [Portfolio demo](#portfolio-frontend) · [Recorded results](#what-the-experiments-showed) ·
-[Evaluation guide](evaluation/README.md) · [Docker operations](DOCKER.md)
+Genuine recorded investigation, 24 October 2026: HTTP reproduction, correlated
+logs, implementation evidence and its Phoenix trace.
+[More screenshots and capture provenance](assets/demo/README.md).
+
+## What it demonstrates
+
+- **Controlled agent execution:** four typed tools, explicit session state and
+  application-enforced limits; the model proposes actions rather than executing them.
+- **Evidence-based diagnosis:** API contract inspection, real HTTP requests,
+  request-correlated logs and allowlisted implementation inspection.
+- **Observable investigations:** an authentic tool timeline, measured usage and
+  exact-trace Phoenix viewing in the React/TypeScript demo.
+- **Evaluation-driven iteration:** a frozen 18-case dataset, six evaluator
+  families, a controlled V1/V2 experiment and separate current-system V3 verification.
 
 ## Architecture
-
-The local stack contains two FastAPI services and Phoenix. OpenAI is contacted
-only for live agent or judge requests; startup and offline checks need no key.
 
 ```mermaid
 flowchart TB
@@ -40,202 +44,62 @@ flowchart TB
     Tools -->|"OpenAPI / approved HTTP"| Sandbox["FastAPI Sandbox API"]
     Sandbox -->|"state + request logs"| SQLite[("Shared SQLite")]
     Tools -->|"request-ID log lookup"| SQLite
-    Loop -.->|"OTLP/HTTP spans"| Phoenix["Phoenix collector + UI<br/>persistent storage"]
-    Evaluation["Offline evaluation<br/>snapshot replay / mocked judgments"]
-    CI["Offline CI<br/>Ruff · scoped Mypy · pytest / Golden"]
+    Loop -.->|"OTLP/HTTP spans"| Phoenix["Phoenix collector + UI"]
+    Evaluation["Evaluation<br/>snapshots + six evaluator families"]
+    CI["Offline CI<br/>Python + frontend checks"]
     Loop -.->|"opt-in snapshots"| Evaluation
     CI -.->|"contract checks"| Loop
 ```
 
-Solid arrows show requests, application execution, observations, or storage access.
-Dashed arrows show decision-provider exchanges, telemetry, or supporting workflows. The model
-does not execute tools directly. Log inspection reads the shared database;
-implementation inspection reads packaged, allowlisted source, not arbitrary files
-or a remote shell. The evaluation harness also supports separately approved live
-collection and judging, outside ordinary CI.
+The React/Vite frontend calls `/demo/debug`, reusing this same loop against a
+fresh in-process Sandbox and disposable SQLite database per investigation.
+The `/debug` path above uses the configured Sandbox and shared database.
 
-## How an investigation works
-
-1. `POST /debug` validates the issue and creates a fresh `DebugSessionState`.
-2. The provider asks the model for one tool call or one final diagnosis.
-3. The loop validates the action, checks execution bounds, and dispatches an
-   approved tool. Observations, tool history, and discovered request IDs become
-   explicit state and subsequent model context.
-4. The model chooses whether further evidence is useful. A contract → HTTP
-   reproduction → correlated logs → implementation path is possible, but no tool
-   or fixed order is mandatory. Static evidence can be sufficient.
-5. The service returns a validated `DebugDiagnosis`: `RESOLVED`, `NO_BUG_FOUND`,
-   `INCONCLUSIVE`, or application-generated `LIMIT_REACHED`.
-
-| Tool | Evidence it can obtain | Boundary |
-| --- | --- | --- |
-| `inspect_api_spec` | Documented inputs, responses, schemas | Approved Sandbox endpoints only |
-| `execute_api_request` | Real HTTP status/body and `X-Request-ID` | Approved methods and paths; bounded timeout/body size |
-| `inspect_server_logs` | Structured events for a request ID | UUID input; shared SQLite |
-| `inspect_endpoint_implementation` | Relevant route, model, and database code | Explicit source-section allowlist |
-
-Defaults are **8 decisions, 6 tool executions, 2 identical calls, and a 45-second
-session timeout**. Tool names and arguments are validated by application code;
-URLs and unsupported endpoints are rejected. The provider permits one correction
-for malformed output, and the loop allows one timeout retry within the same
-bounds. Approved POST/PATCH calls may change disposable Sandbox data. There is no
-source-editing, shell, unrestricted browsing, or production-system tool.
-
-Log lookup validates UUID syntax. Using a request ID observed in the current
-session is the intended correlation flow, not an enforced provenance restriction.
-
-Typed contracts validate required fields and status semantics; they cannot prove
-that a diagnosis is true. An HTTP 500 is useful evidence, so a successful HTTP
-tool execution can report a failing API response. Provider acceptance failures
-can produce an `INCONCLUSIVE` fallback rather than a domain diagnosis. See the
-[loop](agent_service/agent/loop.py), [contracts](agent_service/agent/schemas.py),
-and [dispatch boundary](agent_service/agent/dispatch.py).
-
-## Observing the evidence path
-
-OpenTelemetry and OpenInference export one `DebugSession` trace with
-`agent_decision` spans, automatic LLM children, tool spans, and `final_diagnosis`.
-Tool executions are siblings of decisions, not model-executed actions. Metadata
-includes approved route templates, canonical request UUIDs, timing, token-usage,
-and status information. Unrecognized endpoint metadata is omitted.
-Raw issues, model input/output, HTTP bodies, log messages, and source contents are
-excluded from trace attributes; LLM error text is sanitized. Investigation input
-and tool evidence still go to OpenAI during live reasoning. Opt-in evaluation
-snapshots contain private diagnostic content and remain outside Git.
-
-![Historical Phoenix trace for a missing-inventory investigation](assets/phoenix-missing-inventory.png)
-
-This is a genuine retained V2 `order_missing_inventory_02` investigation from
-2026-10-21, displayed in Phoenix from an isolated storage copy. Its five decisions,
-four tools, five LLM calls, and final diagnosis match the recorded run. The selected
-HTTP tool shows a correlated 500 response; payloads and raw diagnostics are not
-shown. It is not the synthetic Docker smoke trace. See
-[asset provenance and privacy checks](assets/README.md).
+The loop accumulates observations until it returns `RESOLVED`, `NO_BUG_FOUND`,
+`INCONCLUSIVE` or `LIMIT_REACHED`. No fixed tool sequence is required. Defaults
+are **8 accepted decisions, 6 tool attempts, 2 identical calls and 45 seconds**.
+See the [end-to-end code walkthrough](assets/demo/WALKTHROUGH.md#follow-one-report-through-the-code).
 
 ## What the experiments showed
 
-The frozen dataset has **18 cases**: five seeded bug families with three
-paraphrases each, two no-bug controls, and one insufficient-input control.
-Each evaluation case starts from isolated, reset SQLite fixtures. The six
-evaluator families cover tool selection, tool arguments, root cause, grounding,
-response quality, and trajectory. Deterministic checks and explicit live judges
-have separate roles; agent-only token and latency measurements exclude judging.
+The frozen dataset contains 15 bug reports, two no-bug controls and one
+insufficient-input control. **Strict success** requires the expected status,
+fully grounded evidence and a correct root cause where applicable.
 
-**Strict success** requires the expected final status, `GROUNDED` evidence, and
-`CORRECT` root cause for bug cases. A correct root cause, a matching status, or a
-clear response alone is insufficient. The expected inconclusive control can pass.
-Tool efficiency and successful-path convergence are separate measures, not proof
-of correctness or global optimality. Judge labels are fallible measurements.
+![Recorded strict successes: V1 13/18, V2 15/18, V3 17/18; V3 is a separate current-system verification](assets/v1-v2-v3-results.svg)
 
-The [V1 baseline](evaluation/reports/v1-baseline-2026-10-18.md) found 13 strict
-successes: 12 bug cases and the insufficient-input control. The
-[error analysis](evaluation/reports/v1-error-analysis.md) identified two distinct
-failure classes: three missing-inventory investigations did not establish the
-runtime condition, while two no-bug investigations failed provider acceptance
-after correction. The exact rejected response subtype remains unknown.
+**Purpose of each run**
 
-V2 changed only investigation instructions: consider approved runtime reproduction
-when a causal claim depends on unobserved state, use correlated logs when useful,
-and clarify that Sandbox POST/PATCH mutations are permitted. Models/settings,
-tools, permissions, bounds, fixtures, dataset, and evaluator semantics stayed
-fixed. No mandatory sequence or case-specific answer was introduced.
+- **V1 — Oct 18:** establish the initial baseline.
+- **V2 — Oct 21:** test a focused investigation-guidance change under controlled conditions.
+- **V3 — Oct 25:** verify the current system after later changes, including the diagnosis-schema clarification.
 
-![Visualization of recorded V1 and V2 strict successes](assets/v1-v2-results.svg)
+V2 retained all 13 V1 successes. V3 retained all 15 V2 successes and added both
+no-bug controls. V3 matched the expected status in 18/18 cases, but one correct
+missing-inventory diagnosis remained partially grounded under the judge's
+narrower evidence view, so strict success is **17/18**.
 
-New visualization of the recorded results, not a historical interface screenshot.
-Source: [controlled V1/V2 report](evaluation/reports/v1-v2-experiment-2026-10-21.md).
+These are single-run observations, not reliability guarantees. V3 is not a
+third controlled arm of V1/V2: source changes, model/time drift and judge
+variability prevent attributing its difference solely to the schema clarification.
+Historical reports remain unchanged.
 
-| Recorded measure | V1 | V2 |
-| --- | ---: | ---: |
-| Strict successes | 13/18 (72.2%) | 15/18 (83.3%) |
-| Expected final status matches | 14/18 | 16/18 |
-| Correct root cause / scored bug cases | 13/15 | 15/15 |
-| Fully grounded cases | 17/18 | 17/18 |
-| Agent total tokens | 118,812 | 113,122 |
-| Mean agent-session latency | 8.614 s | 9.629 s |
-
-All 13 original strict successes were retained. Missing-inventory `_02` and `_03`
-became strict successes; `_01` was `CORRECT` but `PARTIALLY_GROUNDED` and still
-failed strict success. Two live `NO_BUG_FOUND` acceptance failures remained
-unresolved; neither version actually returned that status. The number of fully
-grounded cases did not increase. Preserving strict successes does not exclude
-every quality or efficiency regression.
-
-Total tokens fell **4.8%**, while average session latency increased **11.8%**.
-This is not a measured monetary saving. Both experiments used `gpt-6-sol` with
-medium reasoning and `gpt-6.1-sol` judging. There was one run per case, and the
-targeted cases are correlated paraphrases of one bug family. Model/judge
-variability, hosted-model changes, and timing noise limit causal and statistical
-claims. See the report for denominators, preserved labels, provenance, and the
-judge's narrower evidence view in `_01`.
+[Controlled V1/V2 results](evaluation/reports/v1-v2-experiment-2026-10-21.md) ·
+[V3 results, usage and limitations](evaluation/reports/v3-verification-2026-10-25.md) ·
+[Evaluation methodology](evaluation/README.md)
 
 ## Run locally
 
-Docker Compose is the recommended path. With Docker running:
+Requires Docker Compose v2 and Node.js 22.12+ on the Node 22 line
+(`frontend/.nvmrc`). From the repository root:
 
 ```bash
 cp .env.example .env  # First setup only; preserve an existing .env.
-# Set OPENAI_API_KEY in .env only when you want live debugging.
-docker compose config --quiet
-docker compose up --build
+# Set OPENAI_API_KEY in the private backend .env for live investigations.
+docker compose up --build -d --wait
 ```
 
-Open [Agent docs](http://127.0.0.1:8001/docs),
-[Sandbox docs](http://127.0.0.1:8000/docs), and
-[Phoenix](http://127.0.0.1:6006). Startup and free smoke checks require no OpenAI
-key. **Live `/debug` requests require valid credentials and may incur API costs.**
-The Compose runtime was verified on Docker Desktop/Linux arm64; other runtime
-architectures have not been executed here.
-
-[DOCKER.md](DOCKER.md) is the operational guide for prerequisites, credentials,
-service addresses, free tool/trace smoke checks, tracing configuration, persistent
-SQLite/Phoenix volumes, stop/start, and disposable-state reset. It also explains
-why container addresses differ from host addresses.
-
-### Without Docker
-
-Use Python 3.11 or newer; the constrained environment and CI are verified with
-Python 3.13. The recorded local development interpreter is CPython 3.13.11.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -c constraints-dev.txt -e ".[dev]"
-cp .env.example .env  # First setup only.
-```
-
-Run these in separate terminals from the repository root, with the same `.env`
-and database path:
-
-```bash
-uvicorn sandbox_api.main:app --env-file .env --port 8000
-uvicorn agent_service.main:app --env-file .env --port 8001
-```
-
-For host tracing, start Phoenix first (for example,
-`uvx arize-phoenix==20.23.0 serve`) and retain
-`PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006` in `.env`.
-Otherwise set it blank to disable export. Restart the Agent after configuration
-changes. Stop conflicting Docker services before using the same host ports.
-
-`POST /debug` accepts a non-empty issue of up to 4,000 characters after trimming
-outer whitespace. Longer issues receive HTTP 422 before provider construction;
-reports are never silently truncated. This is a text limit, not an HTTP body-size
-limit.
-
-A **paid live example**, once credentials are configured:
-
-```bash
-curl http://127.0.0.1:8001/debug \
-  -H 'Content-Type: application/json' \
-  -d '{"issue":"POST /orders returns 500 for product 4 with quantity 1"}'
-```
-
-### Portfolio frontend
-
-Start the backend with `docker compose up --build` as above. The optional
-single-page React/TypeScript client runs separately through Vite; use Node.js
-22.12+ on the supported Node 22 LTS line (`frontend/.nvmrc` selects 22):
+In a separate terminal:
 
 ```bash
 cd frontend
@@ -243,174 +107,59 @@ npm ci
 npm run dev
 ```
 
-Open [APILens](http://127.0.0.1:5173). Choose one of four sample scenarios or enter
-a custom report, acknowledge the live OpenAI request and possible cost, then click
-**Start investigation**. Selecting a sample makes no request. Editing its report
-clears the scenario and switches to fresh default fixtures; selecting another
-sample replaces the report. Reports are locked while a request runs. The completed
-results arrive together. Report controls collapse and results use the full page
-width, with outcome and measured metrics side by side on wide screens. Completion
-focuses and positions the outcome below the section links. Evidence and timeline
-have expandable summaries with counts; missing evidence and suggested fixes stay
-visible. Section links reveal their destination and scroll smoothly, respecting
-reduced-motion preferences. The return link scrolls to the start of the results.
-**Edit report / run again**
-returns to the input with the report and cost acknowledgment retained, without
-making a request. Editing or starting another run clears the displayed results;
-completed snapshots remain in recent history. **Copy
-Diagnosis** copies the actual structured fields, including any uncertainty.
-Timeline technical details disclose tool names, errors, and copyable request IDs.
-The section bar stays in view on sufficiently large desktops only when it leaves
-most of the viewport free. Mobile uses normal page flow and a return link after
-the results. There are no independently scrolling result panes.
+Open [APILens](http://127.0.0.1:5173). The
+[Agent API docs](http://127.0.0.1:8001/docs),
+[Sandbox API docs](http://127.0.0.1:8000/docs) and
+[Phoenix](http://127.0.0.1:6006) are available separately.
 
-**Recent investigations** automatically retains the last five completed responses
-in this browser profile using `localStorage` (no expiry). This includes unresolved
-and limit-reached diagnoses. Open an entry to view its saved report, diagnosis,
-timeline, metrics, and original trace link without sending a request. **Return to
-draft** restores the unfinished report, scenario, and current cost acknowledgment;
-viewing history never replaces them. Drafts and cost consent are not persisted.
-A reload starts at the normal input screen, with history available to open.
+Startup requires no OpenAI key. **Live investigations require backend credentials
+and may incur API costs.** Never put a key in frontend files or `VITE_*` variables.
+For troubleshooting, storage and shutdown, see [DOCKER.md](DOCKER.md).
+[Host Python setup without Docker](agent_service/README.md#run-without-docker)
+is also available.
 
-History is not encrypted and is scoped to the frontend origin: protocol, hostname,
-and port. Use the same `http://127.0.0.1:5173` address to see the same records.
-**Clear history** opens a themed confirmation dialog before deleting only APILens's saved key; the displayed
-result and draft remain in memory. Browser data clearing can also remove records.
-Invalid stored data is ignored with a notice. If storage is blocked or full, results
-remain usable in memory and a notice explains that new records will not survive a
-reload. This is a one-tab local convenience; there is no cross-tab synchronization
-or cross-device history. Saved trace links may outlive the data available in Phoenix.
+### Demo frontend
 
-When recording tracing is enabled, completed results offer **Explore Full Trace**
-on desktop viewports at least 1280 × 720, opening that investigation in a native
-modal dialog with the original Phoenix UI. Close or Escape from the viewer toolbar
-restores focus; Phoenix handles Escape internally when focus is inside its
-cross-origin frame. The visible Close action remains available. The
-page behind the dialog is inert. **Open in Phoenix** is always available as an
-external fallback. Smaller screens use that link without an iframe. Phoenix must be
-running on [local port 6006](http://127.0.0.1:6006). Export is asynchronous: a trace
-ID does not guarantee successful ingestion. If Phoenix is unavailable or the trace
-is not found yet, reopen the same link later; another investigation is unnecessary.
-Trace actions are hidden when no recording trace ID exists. The iframe loads only
-when explicitly opened and unloads on close or resize below the desktop threshold.
-Its load event is not evidence of ingestion. Phoenix 20.23.0 permits framing in the
-local runtime; the desktop viewer avoids its previously verified mobile clipping.
+Choose Missing inventory, Wrong status, Incorrect total or Response schema—or
+enter a custom report. Acknowledge the possible cost and click **Start
+investigation**. Selecting a sample makes no request; editing it switches to
+free-form fixtures. Results show the outcome, evidence, metrics and chronological
+tool activity. A successful HTTP probe can observe an HTTP 500 response.
 
-Live investigations need `OPENAI_API_KEY` on the Agent Service; missing credentials
-produce an actionable error. Never put a key in frontend files or `VITE_*`
-variables. The browser sends relative `POST /demo/debug` requests, which Vite
-proxies to `http://127.0.0.1:8001`. There is no backend CORS change. TypeScript
-types and Zod runtime validation follow the Pydantic/OpenAPI contract, including
-diagnosis status rules. Model text is rendered as plain React text.
+**Explore Full Trace** embeds the exact Phoenix trace at desktop sizes of at
+least 1280 × 720; smaller screens use **Open in Phoenix**. Trace export is
+asynchronous: if a trace is unavailable, reopen the same link later rather than
+rerunning the investigation. **Copy Diagnosis** copies the structured result.
 
-This is a trusted local demo, with browser-local history and no automatic retries or streaming.
-A network failure does not prove the server stopped processing a paid request.
-The production build is a compilation check; use the Vite development server for
-the documented local proxy workflow. See [Docker operations](DOCKER.md#portfolio-frontend)
-for startup and connection troubleshooting.
+**Recent investigations** retains five completed results in this browser's
+`localStorage`, without encryption or expiry. Records are scoped to the frontend
+origin, including hostname and port; use **Clear history** to delete them.
+Reopening a result makes no request and preserves your draft. Drafts and cost
+consent are not persisted. If storage is unavailable, results remain usable in
+memory. There is no backend history service.
 
-### Local portfolio demo API
+### Local demo API
 
-`POST /demo/debug` runs the same provider, bounded loop, tools, and tracing as
-`/debug`, returning
-`{ "diagnosis": DebugDiagnosis, "steps": InvestigationStep[], "trace_id": string | null, "metrics": DemoExecutionMetrics | null }`
-after completion. The optional one-page client consumes this endpoint.
-Keep the service on localhost, as in Compose.
-**This is a live, potentially paid OpenAI request.** Configure `OPENAI_API_KEY`
-on the Agent Service. Startup and offline tests never request a model response.
-
-The request requires `issue`, with the same whitespace trimming and 4,000-character
-limit as `/debug`, and accepts an optional `scenario_id` from this table:
-
-| `scenario_id` | Reproduction to describe in the issue |
+| Endpoint | Execution and response |
 | --- | --- |
-| `missing-inventory` | `POST /orders` with product 4, quantity 1 returns HTTP 500 |
-| `wrong-status` | `GET /products/999` returns HTTP 200 instead of 404 |
-| `incorrect-total` | `POST /orders` with product 2, quantity 2 returns total `129.50` |
-| `response-schema` | `GET /orders/1` returns `productId` instead of `product_id` |
+| `POST /debug` | Configured Sandbox; returns `DebugDiagnosis`. |
+| `POST /demo/debug` | Fresh isolated Sandbox; returns `diagnosis`, sanitized `steps`, optional `trace_id` and measured `metrics`. |
 
-For example, once credentials are configured:
-
-```bash
-curl http://127.0.0.1:8001/demo/debug \
-  -H 'Content-Type: application/json' \
-  -d '{"issue":"GET /products/999 returns 200 instead of 404","scenario_id":"wrong-status"}'
-```
-
-Every demo request gets a fresh, temporary SQLite file with the standard Sandbox
-fixtures and an **in-process Sandbox application reached through ASGI transport**.
-It does not use the Compose Sandbox network or its persistent database/logs.
-POST/PATCH calls and request-ID log correlation use only this disposable database;
-concurrent requests have separate files. Files are removed on completion, failure,
-or cancellation. `response-schema` additionally prepares order 1 (product 1,
-quantity 1) before the agent starts. Preparation is absent from the timeline.
-The other scenarios need only default fixtures. Omitting `scenario_id` permits
-free-form reports against those same fresh fixtures. Scenario selection never
-changes the issue, forces tool choices, or guarantees `RESOLVED`.
-
-Each step has `kind` (`tool_attempt`, `rejected_action`, or `session_error`),
-an approved `tool_name` or null, optional approved `method` and normalized `route`,
-`success`, optional HTTP `status_code`, canonical UUID `request_id`, allowlisted
-`error_category`, and `retry`. Unavailable metadata is null; `retry` is true only
-for an actual timeout retry. Array order is execution order. A successful HTTP
-tool can observe HTTP 500; a rejected action was never executed. An early final
-answer can return `steps: []`. The diagnosis is separate; no final tool or timing
-is invented. For example, a step's sanitized shape is:
-
-```json
-{
-  "kind": "tool_attempt", "tool_name": "execute_api_request",
-  "method": "GET", "route": "/products/{product_id}", "success": true,
-  "status_code": 200, "request_id": "6c0df0f0-0a17-47f8-858e-8a92f3762c65",
-  "error_category": null, "retry": false
-}
-```
-
-This is an illustrative shape, not a recorded result. The memory-only recorder
-exports no arguments, bodies, source, log messages, model output, or reasoning.
-It does not read evaluation artifacts or Phoenix storage. The existing diagnosis
-contract supplies the final explanatory text; application-generated `LIMIT_REACHED`
-responses omit raw fallback evidence and retain the limit reason and safe steps.
-Missing credentials return a safe HTTP 503; provider/setup/execution failures return
-a generic HTTP 502; invalid requests return HTTP 422 before model construction.
-Typed tool failures and limits remain recorded outcomes. `/debug` continues to
-return only `DebugDiagnosis` and uses the configured Sandbox/database as before.
-
-`trace_id` is the active recording `DebugSession` root's OpenTelemetry trace ID:
-32 lowercase hexadecimal characters, never all zero, or null when tracing is
-disabled/nonrecording. It is correlation metadata, not authorization or proof of
-export. The frontend validates the ID and constructs only the trusted local URL
-`http://127.0.0.1:6006/redirects/traces/{trace_id}`. Phoenix 20.23.0 resolves the
-project itself; the demo performs no project lookup and exposes no trace payloads.
-
-The memory-only recorder also returns `metrics` with these definitions. A missing
-metrics object (for example, an older service) is displayed as unavailable.
-
-| Field | Measurement |
-| --- | --- |
-| `duration_seconds` | Monotonic elapsed time between agent-loop start/finish hooks, including decisions, tool executions and retries; excludes fixture preparation, provider construction, final-diagnosis span creation, export, and browser/network time. Null before lifecycle timing is available. |
-| `tool_attempt_count` | Actual tool-start events, including failed attempts and retries; excludes rejected actions. Zero means no tool attempts. |
-| `model_request_count` | Observed model-start hooks, including corrective requests, failures and unfinished calls; never inferred from decisions. Null when no hooks were observed, since scripted/uninstrumented providers may make no usage events. |
-| `input_tokens`, `output_tokens`, `total_tokens` | Each field is summed only when **every** observed model request has a valid, nonnegative integer measurement for it. Missing, unfinished, or invalid usage makes that field null; no inferred totals or partial sums. An observed zero remains zero. |
-
-Metrics come directly from execution hooks without querying Phoenix. Model names,
-error messages and payloads are excluded; no dollar estimate is calculated.
-
-The frontend displays this completed JSON after an explicit live-request and cost
-acknowledgment. Completed responses may be retained in browser-local recent history;
-the backend retains no demo session history. There is no streaming, reset endpoint,
-or additional backend service.
+Both accept an issue of up to 4,000 characters. The demo additionally accepts
+one of the four scenario IDs. They share the same agent, tools and limits;
+scenario selection prepares fixtures and never forces a diagnosis.
+See the [request/response contract, scenarios and metric definitions](agent_service/README.md#local-demo-api).
 
 ### Verify without paid calls
 
-In the activated development environment:
+With the [Python development environment](agent_service/README.md#run-without-docker)
+installed, run from the repository root:
 
 ```bash
 ruff check .
 python -m mypy
 PYTHON_DOTENV_DISABLED=1 OPENAI_API_KEY= EVAL_JUDGE_MODEL= PHOENIX_COLLECTOR_ENDPOINT= python -m pytest
 git diff --check
-docker compose config --quiet
 cd frontend
 npm ci
 npm run typecheck
@@ -418,28 +167,22 @@ npm test
 npm run build
 ```
 
-GitHub Actions runs Ruff, scoped strict Mypy, and full pytest, including the
-Golden subset, on Ubuntu/Python 3.13. The same required `checks` job also runs the
-frontend install, TypeScript check, mocked-network Vitest/React Testing Library
-tests, and production build on Node 22. Golden tests use scripted decisions and
-mocked judgments alongside real local tools to validate deterministic contracts.
-They do **not** validate live LLM reasoning quality. See
-[CI coverage and merge gates](evaluation/README.md#offline-verification).
-Live collection, calibration, and judging are separate, explicitly paid workflows
-documented in [evaluation/BASELINE.md](evaluation/BASELINE.md).
+The GitHub Actions `checks` job runs these Python and frontend checks. Golden
+regressions use scripted decisions and real local tools; automated tests make
+no paid requests and do not measure live model quality.
 
 ## Scope and limitations
 
-APILens is a constrained learning and portfolio project. It investigates only
-its controlled Sandbox, whose defects are intentional. It has no production
-authentication or deployment design; Compose is a trusted local demonstration.
-Session bounds and typed tools limit actions, but do not eliminate incorrect,
-inconclusive, or invalid model results. Raw provider output is not retained, so
-some historical acceptance failures cannot be diagnosed more precisely.
+APILens is a trusted local demo for its intentionally buggy Sandbox,
+not arbitrary production APIs. It has no public deployment, authentication,
+arbitrary code execution or automatic code changes. Models can still return
+incorrect, unsupported, inconclusive or invalid answers.
 
-The historical results are evidence of an observed improvement, not validation
-as a general-purpose autonomous debugger or incident-management product. Next
-investigation candidates include sanitized provider acceptance diagnostics and
-separately approved repeated measurements. No automatic repair, production
-integration, or additional live experiment is included here. The
-optional frontend presents only the existing demo investigation and diagnosis.
+Phoenix traces exclude raw reports, model I/O, HTTP bodies, logs and source
+content; live reasoning still sends the report and tool evidence to OpenAI.
+Private evaluation snapshots stay outside Git. Browser-local history stores
+submitted reports and structured results, so it should contain only demo data.
+
+For deeper review: [implementation and interview guide](assets/demo/WALKTHROUGH.md),
+[live browser verification](assets/demo/VERIFICATION.md), and
+[V3 protocol and provenance](evaluation/V3.md).

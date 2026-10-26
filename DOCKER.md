@@ -44,9 +44,9 @@ Phoenix database readiness. They do not require credentials or a new API route.
 `POST /demo/debug` instead runs a disposable Sandbox inside the Agent process using
 ASGI transport and a fresh SQLite file under the container's temporary directory.
 It needs no write access to `/data` and never resets the shared Sandbox or its logs.
-See the [demo API contract and scenarios](README.md#local-portfolio-demo-api).
+See the [demo API contract and scenarios](agent_service/README.md#local-demo-api).
 
-## Portfolio frontend
+## Demo frontend
 
 Run `docker compose up --build -d --wait` from the repository root to start the
 current backend code. Then use Node 22.12+ (Node 22 LTS) in a separate terminal:
@@ -93,7 +93,7 @@ The desktop **Explore Full Trace** dialog embeds Phoenix only after a click;
 **Open in Phoenix** remains available on desktop and mobile.
 The recording trace ID can precede ingestion; reopen the same link if it is not yet
 found. No exporter flush or extra investigation is needed. See the
-[frontend workflow](README.md#portfolio-frontend) for tracing availability
+[frontend workflow](README.md#demo-frontend) for tracing availability
 and the desktop viewport requirements.
 
 ## Offline smoke checks
@@ -174,4 +174,5 @@ resolution. The allowlist in `.dockerignore` excludes local secrets, databases,
 Git history, tests, evaluation artifacts, and virtual environments. Application
 containers run as an unprivileged user and retain source for the implementation
 inspection tool. No host source tree or Docker socket is mounted. Host Python
-installation and Uvicorn commands in the README remain available unchanged.
+installation and Uvicorn commands remain available in the
+[Agent Service guide](agent_service/README.md#run-without-docker).

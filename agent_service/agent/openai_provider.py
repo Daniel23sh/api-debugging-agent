@@ -1,6 +1,7 @@
 """OpenAI Responses translation for one APILens debug session."""
 
 import json
+import logging
 import os
 from time import monotonic
 from typing import Literal
@@ -41,6 +42,36 @@ source code or act on external or production systems. Stay within application-en
 permissions and limits. LIMIT_REACHED is application-controlled; never select it."""
 CORRECTION = "The previous output could not be accepted. Return exactly one valid tool call or one structured final diagnosis under the same contracts."
 MAX_FUNCTION_OUTPUT_CHARS = 20_000
+_LOGGER = logging.getLogger(__name__)
+_SEMANTIC_REJECTIONS = {
+    "NO_BUG_FOUND requires evidence": "no_bug_missing_evidence",
+    "NO_BUG_FOUND cannot include a root cause or fix": "no_bug_cause_or_fix",
+    "RESOLVED requires an endpoint, root cause, evidence, and fix": "resolved_missing_fields",
+    "INCONCLUSIVE requires missing evidence": "inconclusive_missing_evidence",
+    "INCONCLUSIVE cannot include a root cause": "inconclusive_cause",
+}
+
+
+def _record_rejection(error: Exception, stage: str, attempt: int) -> None:
+    # Only fixed categories reach private logs; never values, validation text or bodies.
+    category = "response_shape"
+    if isinstance(error, ValidationError):
+        category = "schema_validation"
+        for detail in error.errors(include_input=False, include_url=False):
+            reason = str(detail.get("ctx", {}).get("error", ""))
+            if reason in _SEMANTIC_REJECTIONS:
+                category = _SEMANTIC_REJECTIONS[reason]
+                break
+    elif isinstance(error, json.JSONDecodeError):
+        category = "invalid_json"
+    elif isinstance(error, LengthFinishReasonError):
+        category = "length_limit"
+    elif isinstance(error, ContentFilterFinishReasonError):
+        category = "content_filter"
+    _LOGGER.warning(
+        "Model output rejected: stage=%s category=%s attempt=%d",
+        stage, category, attempt + 1,
+    )
 
 TOOL_DESCRIPTIONS = {
     "inspect_api_spec": "Read the documented request and response contract for an approved endpoint.",
@@ -51,6 +82,14 @@ TOOL_DESCRIPTIONS = {
 
 
 class _ModelDiagnosis(DebugDiagnosis):
+    """Final diagnosis with the application's status semantics.
+
+    RESOLVED requires affected_endpoint, root_cause, evidence and suggested_fix.
+    NO_BUG_FOUND requires evidence, root_cause=null and suggested_fix=null;
+    explain matching behavior in evidence, not in root_cause or suggested_fix.
+    INCONCLUSIVE requires missing_evidence and root_cause=null.
+    """
+
     status: Literal["RESOLVED", "NO_BUG_FOUND", "INCONCLUSIVE"]
 
 
@@ -237,7 +276,8 @@ class OpenAIDecisionProvider:
                 json.JSONDecodeError,
                 LengthFinishReasonError,
                 ContentFilterFinishReasonError,
-            ):
+            ) as error:
+                _record_rejection(error, "sdk_parse", correction_attempt)
                 response = None
 
             # The function output has now been supplied; an invalid response
@@ -247,7 +287,9 @@ class OpenAIDecisionProvider:
                 if response is None:
                     raise _InvalidModelOutput("Structured output could not be parsed")
                 decision = self._decision_from_response(response)
-            except (ValidationError, _InvalidModelOutput, json.JSONDecodeError):
+            except (ValidationError, _InvalidModelOutput, json.JSONDecodeError) as error:
+                if response is not None:
+                    _record_rejection(error, "translation", correction_attempt)
                 if correction_attempt:
                     raise DecisionProviderError(
                         "MODEL_OUTPUT_VALIDATION_ERROR",

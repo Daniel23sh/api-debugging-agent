@@ -43,10 +43,11 @@ HISTORICAL_REPORTING = (
     "692c33422b43bfdb0b4186ef0146ce6ea2ee57423ab3b5307421cdcffdc4e90e"
 )
 CURRENT_REPORTING = "be7eed3c6ebb1faecfc95e727ebd74c0007cc67386832088dc7de1dde0d6d204"
-# Reader versions distinguish original execution, Phase 8 archival repairs, and V2 identity support.
+# Exact reader versions retain historical access as experiment identities evolve.
 HISTORICAL_READERS = "7ef91544e1e6fadbf6641e6f97487b1b975c5d28764b744a0a54a636743a4a9a"
 ARCHIVE_READERS = "7a4c14e7013f6d72432d714392e7a71c5fd0d10882f89440c390b370579f5a35"
-CURRENT_READERS = "36150dda491618c7f5e3a4961bc150d4177c301d8a99953e89387f3f284df300"
+V2_READERS = "36150dda491618c7f5e3a4961bc150d4177c301d8a99953e89387f3f284df300"
+CURRENT_READERS = "5347db29ba1a077618f96721b55c5fb27dfc09d1659295d7533f31c2cc4ad4b0"
 
 
 def _canonical_ast(value):
@@ -271,7 +272,7 @@ def check_cohort(
         files = source_files(ref)
         if source_checksum(files) != manifest["source_sha256"]:
             raise BaselineError("COMPARISON_SOURCE_MISMATCH")
-        approved_readers = {CURRENT_READERS}
+        approved_readers = {CURRENT_READERS, V2_READERS}
         if manifest["kind"] == "apilens-v1-baseline":
             approved_readers.update({HISTORICAL_READERS, ARCHIVE_READERS})
         readers_valid.append(

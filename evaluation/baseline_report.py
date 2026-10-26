@@ -263,18 +263,16 @@ def build_summary(directory: Path, *, revision: str = "initial") -> dict:
 
 def render_report(summary: dict) -> str:
     manifest = summary["experiment"]
+    titles = {
+        "apilens-v1-baseline": ("V1", "baseline"),
+        "apilens-v2-experiment": ("V2", "experiment"),
+        "apilens-v3-verification": ("V3", "current-system verification"),
+    }
+    variant, purpose = titles[manifest["kind"]]
     title = (
-        (
-            "V1 baseline"
-            if manifest["kind"] == "apilens-v1-baseline"
-            else "V2 experiment"
-        )
+        f"{variant} {purpose}"
         if manifest["mode"] == "live"
-        else (
-            "OFFLINE SMOKE — not V1 performance results"
-            if manifest["kind"] == "apilens-v1-baseline"
-            else "OFFLINE SMOKE — not V2 performance results"
-        )
+        else f"OFFLINE SMOKE — not {variant} performance results"
     )
     lines = [
         f"# {title}",

@@ -7,6 +7,10 @@ agent, prompts, limits, fixtures or evaluator semantics.
 
 The approved live run is recorded in the [2026-10-18 V1 baseline report](reports/v1-baseline-2026-10-18.md),
 with machine-readable aggregates alongside it. Raw artifacts remain ignored.
+The [controlled V1/V2 result](reports/v1-v2-experiment-2026-10-21.md) and
+[separate current-system V3 result](reports/v3-verification-2026-10-25.md)
+are complete. Phase sections below retain their original protocol boundaries;
+their example paid commands are not approval for another run.
 
 ## Offline verification
 
@@ -213,8 +217,10 @@ POST/PATCH requests may change isolated Sandbox data; source-code changes and
 external/production actions remain prohibited. Static diagnosis remains valid
 when its evidence is sufficient. Provider parsing/correction, model/settings,
 tools/permissions, limits, fixture/setup, dataset, evaluators and metric definitions
-are unchanged. Model-quality effects remain unmeasured until a separately approved
-Phase 10B experiment. See the [selected hypothesis](reports/v1-error-analysis.md#9-one-v2-target-and-testable-hypothesis).
+were unchanged in that intervention. Phase 10A alone did not measure model-quality
+effects; the separately approved Phase 10B result is preserved in the
+[V1/V2 report](reports/v1-v2-experiment-2026-10-21.md). See the
+[selected hypothesis](reports/v1-error-analysis.md#9-one-v2-target-and-testable-hypothesis).
 
 The existing runner accepts `--variant v2` at creation; default V1 commands retain
 their behavior. V2 uses manifest kind `apilens-v2-experiment`, summary kind
@@ -423,6 +429,17 @@ weaken deterministic gates or reinterpret historical evaluator semantics.
 The [observed V2 result](reports/v1-v2-experiment-2026-10-21.md) was 15/18 strict
 successes versus V1's 13/18, without losing previous strict successes. It is a
 historical reference from one run per case, not a universal CI threshold or a
-guarantee for future stochastic runs. The two live `NO_BUG_FOUND` failures remain;
-deterministic acceptance tests do not establish live provider quality. A live
-result review is a human release/behavior decision, separate from passing CI.
+guarantee for future stochastic runs. Its two `NO_BUG_FOUND` failures remain in
+the historical V1/V2 record; both cases passed the separate current-system V3
+verification below. Deterministic acceptance tests do not establish live provider
+quality. A live result review is a human release/behavior decision, separate from
+passing CI.
+
+## Later current-system verification (V3)
+
+The separately approved [V3 workflow and decision](V3.md) measured the current
+18-case system after the acceptance fix, recording [17/18 strict successes](reports/v3-verification-2026-10-25.md).
+It preserves V1/V2 history and evaluator semantics; it is not another controlled
+V1/V2 prompt experiment. V3 has a distinct identity and completed its own no-paid
+preflight and explicitly approved collection/initial judging. Further executions
+or evaluation revisions require separate approval.

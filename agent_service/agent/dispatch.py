@@ -75,7 +75,6 @@ ToolExecutor = Callable[
 
 @dataclass(frozen=True, slots=True)
 class _RegisteredTool:
-    name: str
     args_model: type[BaseModel]
     executor: ToolExecutor
 
@@ -123,22 +122,18 @@ async def _inspect_endpoint_implementation(
 TOOL_REGISTRY: Mapping[str, _RegisteredTool] = MappingProxyType(
     {
         "inspect_api_spec": _RegisteredTool(
-            name="inspect_api_spec",
             args_model=InspectApiSpecArgs,
             executor=_inspect_api_spec,
         ),
         "execute_api_request": _RegisteredTool(
-            name="execute_api_request",
             args_model=ExecuteApiRequestArgs,
             executor=_execute_api_request,
         ),
         "inspect_server_logs": _RegisteredTool(
-            name="inspect_server_logs",
             args_model=InspectServerLogsArgs,
             executor=_inspect_server_logs,
         ),
         "inspect_endpoint_implementation": _RegisteredTool(
-            name="inspect_endpoint_implementation",
             args_model=InspectEndpointImplementationArgs,
             executor=_inspect_endpoint_implementation,
         ),
@@ -193,9 +188,9 @@ def prepare_tool_call(
     validated = _validate_tool_call(decision)
     if isinstance(validated, ToolDispatchResult):
         return validated
-    registration, args = validated
+    _, args = validated
     return ToolCallRecord(
-        tool_name=registration.name,
+        tool_name=decision.tool_name,
         arguments=args.model_dump(mode="json"),
     )
 
@@ -214,12 +209,12 @@ async def dispatch_tool_call(
         return validated
     registration, args = validated
     tool_call = ToolCallRecord(
-        tool_name=registration.name,
+        tool_name=decision.tool_name,
         arguments=args.model_dump(mode="json"),
     )
     attributes: dict[str, str | bool | int] = {
         SpanAttributes.OPENINFERENCE_SPAN_KIND: OpenInferenceSpanKindValues.TOOL.value,
-        SpanAttributes.TOOL_NAME: registration.name,
+        SpanAttributes.TOOL_NAME: tool_call.tool_name,
     }
     if session_id is not None:
         attributes[SpanAttributes.SESSION_ID] = session_id[:MAX_TRACE_VALUE_CHARS]
@@ -231,7 +226,7 @@ async def dispatch_tool_call(
 
     tracer = tracer if tracer is not None else get_tracer(None)
     with tracer.start_as_current_span(
-        registration.name,
+        tool_call.tool_name,
         attributes=attributes,
         record_exception=False,
         set_status_on_exception=False,

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="title desc">
+  <title id="title">Recorded V1, V2 and V3 strict successes</title>
+  <desc id="desc">18 frozen cases, one live run per case per version. V1: 13 of 18 (72.2%). V2: 15 of 18 (83.3%). V3: 17 of 18 (94.4%). V3 retains all 15 V2 strict successes and adds both no-bug controls. V1/V2 is the controlled comparison; V3 is a separate current-system verification. Single-run observations do not establish causality or statistical reliability. Sources: the 2026-10-21 V1/V2 report and 2026-10-25 V3 report.</desc>
+  <rect width="960" height="450" rx="8" fill="#f8fafc" />
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="40" y="46" font-size="28" fill="#0f172a" font-weight="700">Recorded strict successes</text>
+    <text x="40" y="76" font-size="17" fill="#334155">18 frozen cases · one live run per case per version</text>
+    <text x="40" y="148" font-size="20" fill="#0f172a" font-weight="700">V1</text>
+    <rect x="112" y="119" width="576" height="44" rx="5" fill="#e2e8f0" />
+    <rect x="112" y="119" width="416" height="44" rx="5" fill="#475569" />
+    <text x="718" y="148" font-size="21" fill="#475569" font-weight="700">13/18 (72.2%)</text>
+    <text x="40" y="222" font-size="20" fill="#0f172a" font-weight="700">V2</text>
+    <rect x="112" y="193" width="576" height="44" rx="5" fill="#e2e8f0" />
+    <rect x="112" y="193" width="480" height="44" rx="5" fill="#0f766e" />
+    <text x="718" y="222" font-size="21" fill="#0f766e" font-weight="700">15/18 (83.3%)</text>
+    <text x="40" y="296" font-size="20" fill="#0f172a" font-weight="700">V3</text>
+    <rect x="112" y="267" width="576" height="44" rx="5" fill="#e2e8f0" />
+    <rect x="112" y="267" width="544" height="44" rx="5" fill="#2563eb" />
+    <text x="718" y="296" font-size="21" fill="#1d4ed8" font-weight="700">17/18 (94.4%)</text>
+    <g stroke="#64748b">
+      <line x1="112" x2="112" y1="321" y2="327" />
+      <line x1="304" x2="304" y1="321" y2="327" />
+      <line x1="496" x2="496" y1="321" y2="327" />
+      <line x1="688" x2="688" y1="321" y2="327" />
+    </g>
+    <g font-size="15" fill="#334155" text-anchor="middle">
+      <text x="112" y="349">0</text>
+      <text x="304" y="349">6</text>
+      <text x="496" y="349">12</text>
+      <text x="688" y="349">18</text>
+    </g>
+    <text x="40" y="388" font-size="18" fill="#0f172a" font-weight="700">V3 retains all 15 V2 successes; both no-bug controls pass.</text>
+    <text x="40" y="415" font-size="15" fill="#334155">V1/V2: controlled comparison · V3: separate current-system verification.</text>
+    <text x="40" y="437" font-size="14" fill="#475569">Recorded Oct 18, 21 and 25, 2026. No causal or statistical reliability claim.</text>
+  </g>
+</svg>

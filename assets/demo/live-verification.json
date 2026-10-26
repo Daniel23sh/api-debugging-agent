@@ -1,0 +1,201 @@
+{
+  "verification_date": "2026-10-24",
+  "base_commit": "a295e7b",
+  "model": "gpt-6-sol",
+  "reasoning_effort": "medium",
+  "live_session_count": 12,
+  "historical_results_modified": false,
+  "note": "Targeted portfolio verification, not a new V1/V2 evaluation. No judge calls. HTTP 502 responses return no trace or diagnosis. Current inventory rejection logs identify no_bug_cause_or_fix at translation on attempts 1 and 2; historical subtype remains unknown.",
+  "sessions": [
+    {
+      "session_number": 1,
+      "case": "missing-inventory",
+      "stage": "before-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:20:17.959Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "3eec48d137e0f76c176ddd59012678a4",
+      "metrics": {
+        "duration_seconds": 13.94449417400756,
+        "tool_attempt_count": 4,
+        "model_request_count": 5,
+        "input_tokens": 8125,
+        "output_tokens": 496,
+        "total_tokens": 8621
+      }
+    },
+    {
+      "session_number": 2,
+      "case": "wrong-status",
+      "stage": "before-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:20:47.127Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "e63e413363821a4f70aabca5b5645b66",
+      "metrics": {
+        "duration_seconds": 8.39627679498517,
+        "tool_attempt_count": 3,
+        "model_request_count": 4,
+        "input_tokens": 5573,
+        "output_tokens": 411,
+        "total_tokens": 5984
+      }
+    },
+    {
+      "session_number": 3,
+      "case": "incorrect-total",
+      "stage": "before-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:20:56.211Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "1749ee118241220a29569f437ba7a805",
+      "metrics": {
+        "duration_seconds": 7.711630712001352,
+        "tool_attempt_count": 2,
+        "model_request_count": 3,
+        "input_tokens": 4349,
+        "output_tokens": 397,
+        "total_tokens": 4746
+      }
+    },
+    {
+      "session_number": 4,
+      "case": "response-schema",
+      "stage": "before-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:21:05.896Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "38f9e13386e559a4cf510d07779bf9b5",
+      "metrics": {
+        "duration_seconds": 8.312582004000433,
+        "tool_attempt_count": 3,
+        "model_request_count": 4,
+        "input_tokens": 5752,
+        "output_tokens": 374,
+        "total_tokens": 6126
+      }
+    },
+    {
+      "session_number": 5,
+      "case": "order_create_status_no_bug",
+      "stage": "before-schema-description",
+      "http_status": 502,
+      "received_at": "2026-10-24T18:21:16.326Z",
+      "diagnosis_status": null,
+      "trace_id": null,
+      "metrics": null
+    },
+    {
+      "session_number": 6,
+      "case": "inventory_update_status_no_bug",
+      "stage": "diagnostics-only",
+      "http_status": 502,
+      "received_at": "2026-10-24T18:23:03.770Z",
+      "diagnosis_status": null,
+      "trace_id": null,
+      "metrics": null
+    },
+    {
+      "session_number": 7,
+      "case": "order_create_status_no_bug",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:25:23.393Z",
+      "diagnosis_status": "NO_BUG_FOUND",
+      "trace_id": "458623b1581d1a8ae058168d4c31d95f",
+      "metrics": {
+        "duration_seconds": 5.458887793996837,
+        "tool_attempt_count": 2,
+        "model_request_count": 3,
+        "input_tokens": 4568,
+        "output_tokens": 217,
+        "total_tokens": 4785
+      }
+    },
+    {
+      "session_number": 8,
+      "case": "inventory_update_status_no_bug",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:25:28.918Z",
+      "diagnosis_status": "NO_BUG_FOUND",
+      "trace_id": "39db4354918c22c959156912e3e05b0a",
+      "metrics": {
+        "duration_seconds": 3.6999300440074876,
+        "tool_attempt_count": 1,
+        "model_request_count": 2,
+        "input_tokens": 2374,
+        "output_tokens": 171,
+        "total_tokens": 2545
+      }
+    },
+    {
+      "session_number": 9,
+      "case": "missing-inventory",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:26:44.830Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "4631295a53f64f928590a55fac426154",
+      "metrics": {
+        "duration_seconds": 9.986027545994148,
+        "tool_attempt_count": 4,
+        "model_request_count": 5,
+        "input_tokens": 8487,
+        "output_tokens": 474,
+        "total_tokens": 8961
+      }
+    },
+    {
+      "session_number": 10,
+      "case": "wrong-status",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:27:47.253Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "af90926f50e04f3ba8270465307ac48f",
+      "metrics": {
+        "duration_seconds": 7.272065669996664,
+        "tool_attempt_count": 3,
+        "model_request_count": 4,
+        "input_tokens": 5881,
+        "output_tokens": 402,
+        "total_tokens": 6283
+      }
+    },
+    {
+      "session_number": 11,
+      "case": "incorrect-total",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:27:54.197Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "e293770401e8a5e216b625fb32eaab1d",
+      "metrics": {
+        "duration_seconds": 5.824049087008461,
+        "tool_attempt_count": 2,
+        "model_request_count": 3,
+        "input_tokens": 4529,
+        "output_tokens": 265,
+        "total_tokens": 4794
+      }
+    },
+    {
+      "session_number": 12,
+      "case": "response-schema",
+      "stage": "after-schema-description",
+      "http_status": 200,
+      "received_at": "2026-10-24T18:28:02.507Z",
+      "diagnosis_status": "RESOLVED",
+      "trace_id": "2d3d1942352276ae83dfdd3a618bdf0e",
+      "metrics": {
+        "duration_seconds": 7.176949254004285,
+        "tool_attempt_count": 3,
+        "model_request_count": 4,
+        "input_tokens": 6072,
+        "output_tokens": 339,
+        "total_tokens": 6411
+      }
+    }
+  ]
+}
